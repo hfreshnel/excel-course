@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node / Remotion
+node_modules/
+dist/
+build/
+out/
+.remotion/
+
+# Excel lock / temp files
+~$*.xlsx
+~$*.xlsm
+
+# Recordings and renders (regenerable)
+**/recordings/
+**/renders/
+*.mp4.part
+
+# OS / IDE
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# Local env
+.env
+.env.*

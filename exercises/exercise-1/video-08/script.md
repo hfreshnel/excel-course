@@ -1,0 +1,16 @@
+# VIDÉO 8 — Graphique en barres « Sales »
+
+**Durée estimée :** environ 2 min 10 s (texte parlé à 140 mots/min, à recaler sur le rendu audio)
+
+| TC | À l'écran | Texte prononcé | Action Excel |
+|---|---|---|---|
+|00:00|Bandeau « Étape 8 sur 9 — Barres Sales ».|Étape huit sur neuf : un graphique en barres. Cette fois, nous allons comparer trois informations à la fois, pour chaque année.|Ouvrir l'état de fin d'étape 7, feuille D1.|
+|00:10|Graphique « Sales » de l'énoncé.|Dans l'énoncé, chaque année porte trois barres horizontales : le prix HT, le prix soldé et l'économie.|Aucune (image de l'énoncé en incrustation).|
+|00:15|B1 à B13, puis D1 à F13 sélectionnées.|Sélectionnez B1 à B13, les années. Puis, avec la touche Contrôle, D1 à F13 : prix HT, prix soldé et économie. Ces trois colonnes se suivent : une seule sélection suffit.|Sélection B1:B13 + D1:F13.|
+|00:30|Insertion, Barres groupées. Graphique inséré.|Dans l'onglet Insertion, ouvrez le menu des graphiques en barres, et choisissez Barres groupées.|Insérer un graphique en barres groupées.|
+|00:35|Légende surlignée. Encadré « Piège : les années prises pour des valeurs ».|Vérifiez la légende. Il arrive qu'Excel prenne les années pour des valeurs à représenter, parce que ce sont des nombres. Une série Année apparaît alors, avec des barres immenses qui écrasent toutes les autres. Pour corriger, ouvrez Création de graphique, Sélectionner des données. Supprimez la série Année. Puis, sous Étiquettes de l'axe horizontal, cliquez sur Modifier et sélectionnez B2 à B13. Les années redeviennent ce qu'elles doivent être : des catégories.|Si une série Année existe : la supprimer. Catégories = B2:B13 (Annee). Séries finales : D, E, F.|
+|01:05|Déplacer le graphique, Nouvelle feuille « G3 ».|Plaçons ce graphique dans sa propre feuille : Création de graphique, Déplacer le graphique, Nouvelle feuille, G3.|Déplacer le graphique vers une nouvelle feuille graphique G3.|
+|01:15|Titre « Sales ». Titres des axes « Années » et « Euros ». Encadré « Énoncé : Périodes → Années ».|Le titre est Sales, comme dans l'énoncé. Pour les axes, l'énoncé écrit Périodes sur l'axe des catégories. Mais nos catégories sont des années, pas des mois : nous corrigeons, et nous écrivons Années. L'axe des valeurs s'appelle Euros.|Titre = Sales. Titre axe des catégories = Années. Titre axe des valeurs = Euros.|
+|01:30|Les trois barres de 2014 surlignées.|Lisons le graphique. En 2014, la barre du prix HT mesure 95 euros, celle du prix soldé 41 euros 80, et celle de l'économie 53 euros 20. Remarquez que le prix soldé et l'économie, mis bout à bout, redonnent toujours le prix HT. Le graphique le rend visible sans aucun calcul.|Aucune.|
+|01:50|Fond de mur, une couleur par série, légende surlignée.|Appliquons notre habillage : le fond de mur, et une couleur bien distincte pour chaque série. La légende indique quelle couleur correspond à quelle information.|Fond de la zone de graphique = charts-background.jpg. Une couleur par série.|
+|02:05|Graphique final. Bandeau « Étape 8 sur 9 terminée ».|Notre troisième graphique est terminé. À l'étape neuf, la dernière, nous construirons un graphique combiné, avec deux axes.|Enregistrer l'état de fin d'étape 8.|

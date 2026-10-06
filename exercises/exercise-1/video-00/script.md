@@ -1,0 +1,15 @@
+# VIDÉO 0 — Introduction générale
+
+**Durée estimée :** environ 2 min 25 s (texte parlé à 140 mots/min, à recaler sur le rendu audio)
+
+| TC | À l'écran | Texte prononcé | Action Excel |
+|---|---|---|---|
+|00:00|Plan plein cadre. Titre « Excel — Culture Numérique ».|Bonjour et bienvenue dans cette masterclass Excel. Ensemble, nous allons résoudre pas à pas un exercice complet : un tableau de ventes sur douze mois, des calculs automatiques et quatre graphiques.|Aucune (titre en incrustation).|
+|00:15|Feuille QQ de l'énoncé. Consignes 1 à 4 surlignées successivement.|Voici l'énoncé. Il contient quatre consignes. Un : construire un tableau dans une nouvelle feuille appelée D1, avec la police Cambria. Deux : nommer les plages de données. Trois : faire tous les calculs avec des formules, puis colorer la feuille en vert. Quatre : créer quatre graphiques, chacun dans sa propre feuille.|Ouvrir la copie de 01-data.xlsx, feuille QQ. Défiler sur les consignes A2:A5.|
+|00:35|Aperçu du tableau final, puis des quatre graphiques.|Voici ce que vous saurez faire à la fin de cette série. Notre objectif n'est pas seulement d'obtenir les bons chiffres. Nous voulons comprendre comment construire un tableau fiable, comment le faire calculer à notre place, et comment présenter clairement les résultats.|Aucune (captures du résultat final en incrustation).|
+|00:55|Bandeau « Public débutant — Microsoft 365 en français ».|Cette série est pensée pour les débutants. Nous utilisons Excel Microsoft 365, en français. Si vous n'avez jamais écrit une seule formule, c'est parfait : nous partons de zéro.|Aucune.|
+|01:05|Bandeau « Une formule, toute une colonne : la propagation ».|Nous allons aussi utiliser une fonctionnalité moderne d'Excel : la propagation. Une seule formule suffit pour calculer une colonne entière. Vous verrez, cela change tout.|Aucune.|
+|01:15|Encadré « Nous corrigerons les erreurs de l'énoncé ».|Un point important : l'énoncé contient quelques erreurs, par exemple dans le titre d'un graphique. Nous les signalerons au fur et à mesure, et nous verrons comment les corriger. C'est un excellent entraînement pour garder un regard critique sur ce que l'on vous donne.|Aucune.|
+|01:35|Feuille de route : les neuf étapes listées, mises en évidence une à une.|Voici notre feuille de route, en neuf étapes. Étape un, construire le tableau. Étape deux, nommer les plages. Étape trois, les premières formules : prix soldé, économie et évolution. Étape quatre, la TVA et le contrôle des calculs. Étape cinq, le chiffre d'affaires et les synthèses. Puis, de l'étape six à l'étape neuf, nos quatre graphiques : un histogramme, un graphique en secteurs, un graphique en barres et un graphique combiné.|Aucune.|
+|02:05|Encadré « Données fixes de l'énoncé ».|L'énoncé vous autorise à inventer vos propres chiffres de départ. Pour que vous puissiez comparer vos résultats aux nôtres, chiffre par chiffre, nous utiliserons ceux de l'énoncé.|Aucune.|
+|02:20|Plan plein cadre. Transition vers Excel.|Ouvrez Excel, et rendez-vous à l'étape un : construire le tableau. À tout de suite.|Aucune.|
