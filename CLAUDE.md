@@ -53,14 +53,36 @@ script (texte + indications écran)
 - Enregistrer **par étape**, pas en un bloc continu, pour faciliter le recalage sur l'audio.
 - Valider le schéma avec Wilfried avant toute implémentation lourde.
 
+**Décisions du 2026-10-06** (validées par Wilfried)
+- Formules saisies de façon **instantanée** (`Range.Formula2Local` d'un coup), pas de frappe simulée.
+- Ancrage des actions par **marqueurs dans le texte prononcé** : `{@nom}` déclenche l'action au début du mot qui suit. Chaque ligne du tableau porte aussi un marqueur implicite `r1`, `r2`… Les marqueurs ne sont jamais prononcés (`tools/video_script.py` les retire).
+- Les scripts de l'exercice 1 sont **figés** (texte prononcé). Seuls des marqueurs y sont ajoutés.
+- **Zoom Excel des prises : 90 %** (colonnes A à P visibles en 1920×1020).
+- **Saisies en incrustation** (rendu en post, Excel reste en saisie instantanée) :
+  - périmètre : **formules** et **noms de plages** (zone Nom). Pas les valeurs ponctuelles ni la saisie de données en masse ;
+  - apparition **jeton par jeton**, chaque jeton (`=`, `Prix_HT`, `*`, `Solde`) au moment où la voix le dicte, calé sur les timestamps des mots, **sans marqueur supplémentaire** dans les scripts ;
+  - **grille floutée légèrement, sauf la cellule cible** qui reste nette et surlignée ;
+  - **carte centrée** à l'écran.
+- Thème Office : **pas de changement pour l'instant** (ruban sombre, cellules claires via la surcharge temporaire du registre).
+
+**Schéma provisoire (prototype vidéo 3, à faire évoluer avec Wilfried)**
+- `video-XX/timeline.json` : `startState`, `endState`, `sheet`, `view` (zoom, défilement, cellule active) et `events`. Chaque événement : `at` (marqueur), `offset` facultatif (s), `type` (`select`, `formula`, `value`, `highlight`), `target` (adresse, unions avec `,` acceptées). `formula` porte la formule en syntaxe française ; `value` porte la valeur. Un `highlight` se termine à `to` (marqueur) ou après `duration`.
+- `recordings/voice/markers.json` : `{source, audio, duration, markers: {nom: secondes}, words: [{text, start, end}]}`. Produit aujourd'hui par la voix provisoire (`System.Speech`, voix Hortense, **16 kHz obligatoire** : `AudioPosition` est calculé à la fréquence native de la voix, toute autre fréquence de sortie fausse les positions des mots). Les événements SAPI ne parviennent pas à pywin32, d'où le passage par `tools/sapi_synthesize.ps1`. L'alignement Whisper produira le même format.
+- `recordings/take-*/log.json` : instant prévu et réel de chaque événement (`plannedTime`, `actualTime`, `jitter`), `plannedEnd` des surbrillances et `rects` en pixels relatifs à la zone capturée, avec une auto-vérification `check` par `RangeFromPoint`. Base de temps : secondes depuis le début de l'audio ; temps vidéo = temps audio + `leadIn`.
+- `render_preview.py` produit un **aperçu de contrôle** ffmpeg (capture + voix + rectangles, contours cyan des actions), pas le rendu final.
+- `tools/render_lesson.py` construit `take-*/composition.json` (surbrillances et cartes de saisie, temps en secondes vidéo, rectangles en pixels de capture) puis lance le rendu Remotion (`compositing/`, composition `ExcelLesson`, `--public-dir` = dossier de prise). Les mots du script sont alignés sur les mots horodatés par `difflib.SequenceMatcher` (tolérant aux écarts de transcription) ; les mots non appariés sont interpolés. Dictée d'une formule : texte après le dernier « saisissez » qui précède le marqueur de l'événement, jusqu'à la fin de phrase ou « , puis », découpé aux virgules ; le nombre de morceaux doit égaler le nombre de jetons de la formule, sinon erreur explicite. Champ facultatif `dictationFrom` (marqueur) pour les dictées sans « saisissez ».
+
 ## 4. Environnement
 
 - **Repo sous Windows** (`D:\dev\git\excel-course`). Wilfried utilise aussi WSL pour ce projet : ne pas accéder aux fichiers du repo depuis WSL via `/mnt/d` pour des traitements lourds (lent). Décider et documenter où tourne chaque outil.
 - Outils constatés côté Windows (2026-10-05) : Python 3.14.3 (gestionnaire d'installation Python, lanceur `py` ; `python` dans Git Bash résout d'abord l'alias Microsoft Store), Node 24.11.1, Git 2.52, Git LFS 3.7.1. `uv` non installé.
-- **Automatisation Excel : côté Windows uniquement** (COM). Excel de bureau M365 requis, pas Excel Online. Bibliothèques candidates : `pywin32` ou `xlwings`.
+- Ajoutés le 2026-10-06 : **ffmpeg 9.0.2** (`winget install Gyan.FFmpeg` ; le PATH n'est à jour que dans les nouveaux shells, `automation/ffmpeg_tools.py` le trouve aussi via le dossier winget ou `FFMPEG_PATH`) ; venv Python **`.venv` à la racine** (`requirements.txt` : `pywin32` 312).
+- **Automatisation Excel : côté Windows uniquement** (COM). Excel de bureau M365 requis, pas Excel Online. Bibliothèque retenue : **`pywin32`** (liaison dynamique).
+- Excel constaté : M365 build 20430, interface en français (1036), séparateur de liste `;`, décimal `,`, milliers U+202F. Écran 1920×1080 physiques à **125 %** (DPI 120) ; zone de travail capturée 1920×1020 (barre des tâches exclue).
+- Thème Office de Wilfried : « Utiliser le paramètre système » (Windows en sombre). Pour les prises, `ExcelSession` force temporairement `UI Theme = 0` dans le registre puis restaure la valeur : les **cellules passent en clair** mais le **ruban reste sombre** (le thème M365 synchronisé par le compte l'emporte). Thème des enregistrements à trancher par Wilfried (Fichier > Compte > Thème Office).
 - Matériel : portable **RTX 3060 Laptop, 6 Go de VRAM**. Whisper (`faster-whisper`) en modèle `small` ou `medium` est réaliste. Garder en tête cette limite pour tout modèle local (génération vidéo, transfert de performance).
-- Capture d'écran : prototype avec **ffmpeg `gdigrab`** (`-draw_mouse 0` pour ne pas capturer le curseur), migration possible vers **OBS + obs-websocket** si la capture est instable. Wilfried n'a pas encore tranché définitivement.
-- Compositing : **Remotion** (React/TypeScript). Vérifier la licence pour un usage commercial avant de s'engager : https://www.remotion.dev/docs/license
+- Capture d'écran : prototype avec **ffmpeg `gdigrab`** (`-draw_mouse 0` pour ne pas capturer le curseur), migration possible vers **OBS + obs-websocket** si la capture est instable. Wilfried n'a pas encore tranché définitivement. gdigrab capture bien en pixels physiques ; l'instant de début de capture est ancré sur le premier `out_time_us` de `-progress`. gdigrab horodate sur l'horloge réelle : les images perdues laissent des **trous (fréquence variable)**, sans dérive mais refusés par le compositeur Remotion (« No frame found at position »). La prise enregistre donc `capture.raw.mp4` puis le normalise en `capture.mp4` à 30 im/s constants, une image clé par seconde (`normalizeCapture`).
+- Compositing : **Remotion** (React/TypeScript). **Licence vérifiée le 2026-10-06** ([LICENSE.md](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md)) : gratuite pour un particulier, même en usage commercial. Wilfried porte le projet seul, sans rémunération ni vocation commerciale (le « client » est un porteur de projet qui ne le paie pas). À revérifier si ce statut change ou au passage à Remotion 5.0 (conditions annoncées comme modifiées).
 - Outils gratuits/open source privilégiés. Dépendances externes acceptées si elles font bien le travail.
 
 ## 5. Arborescence du repo (proposition de départ, à ajuster)
@@ -75,10 +97,12 @@ script (texte + indications écran)
 │   ├── exercise-1/
 │   │   ├── data/      # 01-data.xlsx
 │   │   ├── solution/  # 02-solution.xlsx, 02-sol.xlsx
-│   │   └── video-00 … video-09/   # script.md par vidéo (video-00 : script à écrire)
+│   │   ├── states/    # classeurs de fin d'étape générés (non versionnés)
+│   │   └── video-00 … video-09/   # script.md (+ timeline.json pour video-03) ; recordings/, renders/ non versionnés
 │   └── exercise-2/    # vide tant que non reçu
-├── automation/        # Python : pilotage Excel + capture
-├── compositing/       # Remotion (TypeScript)
+├── requirements.txt   # dépendances Python (venv .venv à la racine)
+├── automation/        # Python : pilotage Excel, capture, journal, aperçu de contrôle
+├── compositing/       # Remotion 4.0.533 + @remotion/media (TypeScript, React 19) : ExcelLesson, HighlightBox, FocusBlur, TypingCard
 └── tools/             # scripts utilitaires (timestamps, recalage…)
 ```
 
@@ -99,7 +123,7 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 ### Gestion des fichiers binaires
 
 - **Git LFS** suit `*.xlsx`, `*.xlsm`, `*.jpg`, `*.jpeg`, `*.png`, `*.mp4`, `*.mov`, `*.webm`, `*.wav`, `*.mp3` (voir `.gitattributes`). Tout nouveau type binaire doit y être ajouté **avant** son premier commit.
-- Les enregistrements et rendus régénérables (`recordings/`, `renders/`) ne sont pas versionnés (voir `.gitignore`).
+- Les enregistrements, rendus et états régénérables (`recordings/`, `renders/`, `states/`) ne sont pas versionnés (voir `.gitignore`).
 
 ## 6. Règles techniques Excel (COM)
 
@@ -109,7 +133,13 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 - **Repartir d'un classeur propre** (copie du fichier d'exercice) à chaque prise.
 - `ScreenUpdating` désactivé pendant les opérations lourdes, réactivé avant la capture. Prévoir un court délai avant les surbrillances pour un affichage stable.
 - Nettoyage garanti (fermeture d'Excel, arrêt de l'enregistrement) même en cas d'exception.
-- **Le code n'a pas pu être testé contre un vrai Excel** lors de la conception. Le premier lancement fait office de recette : demander le retour d'erreurs à Wilfried.
+- **Locale et pywin32** : pywin32 appelle Excel avec la locale utilisateur (fr-FR). Conséquences constatées : `Range("A1,B2")` échoue (Excel attend `;`), d'où `resolveRange` (union via `Application.Union`) ; `NumberFormat` est interprété à la française, d'où **`NumberFormatLocal`** avec les séparateurs lus dans Excel (`ExcelSession.localFormats`) ; les formules sont écrites avec **`Formula2Local`** (syntaxe française des scripts).
+- **Pixels** : `ActiveWindow.ActivePane.PointsToScreenPixelsX/Y` (et non la version `Window`), processus DPI-aware par moniteur. Validé au pixel près au zoom 130 % (contrôle `RangeFromPoint` = ok).
+- **`01-data.xlsx` contient une liaison externe** vers `C:\Users\baoucmoh\Documents\DO.xlsx` (poste du client). Ouverture avec `UpdateLinks=0`, liaison rompue dans les états générés. En Excel visible, la boîte « liaisons externes » bloque `Workbooks.Open` sans erreur.
+- Toujours ouvrir une copie placée dans le repo (`recordings/`), pas dans `%TEMP%`.
+- Bulle « Formule propagée » (`DynamicArrayFirstSpillCallout`) : affichage unique par profil, qui masquait la grille dans la première prise. `ExcelSession` la marque comme vue (registre `TeachingCallouts`, valeur 2) avant chaque prise visible.
+- Au zoom 90 %, le texte de la grille fait environ 13 px de haut en 1080p : lisible en plein écran, petit sur mobile. Piste : recadrage dynamique (zoom sur la zone utile) au compositing.
+- Les états de départ sont générés par `automation/exercise_1_states.py` (étapes 1 et 2 rejouées par code, plus un ajustement automatique des largeurs de colonnes que le script de la vidéo 1 ne mentionne pas).
 
 ## 7. Conventions de code
 
@@ -150,11 +180,14 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 - **Barre de juillet en orange** dans l'histogramme de l'énoncé : raison inconnue, non reprise dans les scripts.
 - **Titres de graphiques en anglais** dans l'énoncé (« Sales », « Evolution », « Years », « Prices ») : conservés, sauf « Périodes » → « Années » (vidéo 8).
 - **Exercice 2** pas encore reçu.
-- **Licence Remotion** à vérifier pour l'usage commercial.
 - **Dérive de synchronisation** sur les longues manipulations : d'où l'enregistrement par étape.
 - **Qualité « masterclass »** : prévoir une passe de contrôle visuel sur chaque vidéo, un pipeline automatisé produit un rendu propre mais standardisé.
-- **Saisie visible ou instantanée** des formules : à décider (pédagogie vs fiabilité).
-- Temps de rendu Remotion à surveiller sur 9 vidéos et plus.
+- **Liaison externe dans `01-data.xlsx`** : les élèves verront l'avertissement « liaisons externes » à l'ouverture. À signaler au client (fichier à nettoyer).
+- **Thème Excel des enregistrements** : reporté par Wilfried (ruban sombre actuellement).
+- **Surbrillances hors grille** (barre de formule, zone Nom, ruban) : non calculables via `Range`. Les saisies passant en incrustation, le besoin restant concerne surtout le ruban et les boîtes de dialogue (coordonnées fixes mesurées ou UI Automation).
+- Temps de rendu Remotion à surveiller sur 9 vidéos et plus. Mesuré le 2026-10-06 : environ 8 min pour la vidéo 3 (3 min 54 s, 7 030 images, concurrence 6). Portable **sur secteur** obligatoire (une coupure de batterie a interrompu un rendu).
+- **`OffthreadVideo` abandonné** : sur la capture plein écran de 4 min, son cache d'images débordait (« No frame found at position », cause mémoire documentée). Remplacé par `<Video>` / `<Audio>` de `@remotion/media`, recommandés par la doc : https://www.remotion.dev/docs/troubleshooting/no-frame-found-at-position
+- Flou de la grille pendant les saisies : 3 px + voile léger (`FocusBlur.tsx`). À ajuster à l'œil par Wilfried.
 
 ## 11. Commandes utiles
 
@@ -162,4 +195,11 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 
 - Après un clone : `git lfs install` puis `git lfs pull` pour récupérer les binaires.
 - Vérifier qu'un fichier est bien suivi par LFS : `git lfs ls-files`.
+- Environnement Python (une fois) : `py -m venv .venv` puis `.venv\Scripts\python.exe -m pip install -r requirements.txt`.
+- Générer les états de départ de l'exercice 1 : `.venv\Scripts\python.exe automation\exercise_1_states.py`.
+- Voix provisoire + marqueurs d'une vidéo : `.venv\Scripts\python.exe tools\synthesize_placeholder_voice.py exercises\exercise-1\video-03\script.md`.
+- Prise Excel + capture (ne pas toucher souris ni clavier) : `.venv\Scripts\python.exe automation\run_timeline.py exercises\exercise-1\video-03\timeline.json` (affiche le dossier de prise).
+- Aperçu de contrôle : `.venv\Scripts\python.exe automation\render_preview.py exercises\exercise-1\video-03\recordings\take-<horodatage>`.
+- Compositing (une fois) : `cd compositing` puis `npm install`. Vérification des types : `npm run typecheck`. Studio interactif : `npm run studio`.
+- Vidéo finale d'une prise : `.venv\Scripts\python.exe tools\render_lesson.py exercises\exercise-1\video-03\recordings\take-<horodatage>` (`--data-only` pour ne produire que `composition.json`, `--concurrency N`). Sortie : `video-03\renders\lesson-take-<horodatage>.mp4`.
 - Recalculer les TC et la durée estimée des scripts (après toute modification du texte prononcé) : `py tools/estimate_timecodes.py exercises/exercise-1/video-*/script.md`. Dans Git Bash, préfixer par `PYTHONIOENCODING=utf-8` si la console affiche mal les accents.

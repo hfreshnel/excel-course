@@ -29,6 +29,7 @@ Chaque script utilise le format :
 - **À l'écran** : ce que le montage affiche ou met en surbrillance (bandeaux, encadrés, plages citées).
 - **Action Excel** : ce que l'automatisation exécute. Les formules y sont écrites **en version française d'Excel**, telles que l'élève les tape. L'automatisation devra les écrire avec `Range.Formula2Local`, ou les traduire en anglais pour `Range.Formula2`. Une formule n'est saisie que dans sa première cellule : la propagation remplit le reste.
 - **TC** : estimation calculée par `tools/estimate_timecodes.py` à partir du nombre de mots prononcés (140 mots/min). Le timing réel viendra des timestamps de l'audio.
+- **Marqueurs** `{@nom}` dans le texte prononcé : ils ne sont pas prononcés et ne changent pas le texte. Ils indiquent le mot auquel une action ou une surbrillance de `timeline.json` se déclenche (au début du mot qui suit le marqueur). Chaque ligne a en plus un marqueur implicite `r1`, `r2`… Avant d'envoyer le texte à un générateur de voix, il faut retirer les marqueurs (`tools/video_script.py`, fonction `readCleanSpokenText`). Vidéo annotée à ce jour : **vidéo 3**.
 
 ## Choix de résolution
 

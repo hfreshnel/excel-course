@@ -15,9 +15,10 @@ out/
 ~$*.xlsx
 ~$*.xlsm
 
-# Recordings and renders (regenerable)
+# Recordings, renders and generated workbook states (regenerable)
 **/recordings/
 **/renders/
+**/states/
 *.mp4.part
 
 # OS / IDE
