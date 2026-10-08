@@ -31,6 +31,10 @@ Ne pas les remettre en cause sans validation explicite de Wilfried.
 - Homme, noir, nommé « Professeur Ex ». Préciser « homme » dans les prompts d'image : les générateurs produisent souvent une femme par défaut.
 - Piste initiale : tête de chibi 2D. Wilfried teste maintenant plusieurs niveaux de réalisme (du chibi au photoréalisme) pour retenir **le plus simple à qualité maximale**. Le chibi n'est pas acquis.
 - Générateurs d'images testés : GPT, Gemini, Midjourney, Hedra. **Pas de plan HeyGen actuellement** (à tester d'abord comme outil d'animation).
+**Voix** (décision du 2026-10-08)
+- La voix SAPI est trop mécanique. Wilfried **enregistre lui-même les scripts au téléphone**, et sa voix devient l'horloge de référence de chaque vidéo. Il doute de sa diction et de son aura à l'oral : un modificateur de voix (conversion parole vers parole, ex. ElevenLabs Voice Changer) reste à évaluer après un premier test. Il ne change que le timbre, pas la diction.
+- Chaîne visée : enregistrement → montage → nettoyage (`tools/clean_voice.py`, ou Adobe Enhance Speech puis `--no-denoise`) → [modificateur de voix] → alignement Whisper → `markers.json`. L'alignement se fait sur l'audio **final**.
+- Consignes d'enregistrement : **2 s de silence au début** de chaque prise (le profil de bruit y est appris), pièce petite et garnie de tissus, téléphone à 15-20 cm, format sans perte si l'application le permet.
 - Piste explorée : **transfert de performance** (Wilfried performeur, personnage généré par IA, voix remplacée si pas assez impactante) plutôt qu'avatar piloté par l'audio. Outils gratuits/open source en self-build acceptés.
 
 ## 3. Architecture cible du pipeline
@@ -180,6 +184,7 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 - **Barre de juillet en orange** dans l'histogramme de l'énoncé : raison inconnue, non reprise dans les scripts.
 - **Titres de graphiques en anglais** dans l'énoncé (« Sales », « Evolution », « Years », « Prices ») : conservés, sauf « Périodes » → « Années » (vidéo 8).
 - **Exercice 2** pas encore reçu.
+- **Voix** : qualité de l'enregistrement au téléphone inconnue (premier test à faire). Choix d'un modificateur de voix ouvert. **Conservation des enregistrements bruts** à décider : `recordings/` n'est pas versionné, alors qu'une voix enregistrée ne se régénère pas (ajouter `*.m4a` à LFS si on les versionne). Outil d'alignement Whisper pas encore écrit.
 - **Dérive de synchronisation** sur les longues manipulations : d'où l'enregistrement par étape.
 - **Qualité « masterclass »** : prévoir une passe de contrôle visuel sur chaque vidéo, un pipeline automatisé produit un rendu propre mais standardisé.
 - **Liaison externe dans `01-data.xlsx`** : les élèves verront l'avertissement « liaisons externes » à l'ouverture. À signaler au client (fichier à nettoyer).
@@ -202,4 +207,6 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 - Aperçu de contrôle : `.venv\Scripts\python.exe automation\render_preview.py exercises\exercise-1\video-03\recordings\take-<horodatage>`.
 - Compositing (une fois) : `cd compositing` puis `npm install`. Vérification des types : `npm run typecheck`. Studio interactif : `npm run studio`.
 - Vidéo finale d'une prise : `.venv\Scripts\python.exe tools\render_lesson.py exercises\exercise-1\video-03\recordings\take-<horodatage>` (`--data-only` pour ne produire que `composition.json`, `--concurrency N`). Sortie : `video-03\renders\lesson-take-<horodatage>.mp4`.
+- Diagnostic d'un enregistrement de voix (format, niveaux, bruit de fond, saturation) : `.venv\Scripts\python.exe tools\clean_voice.py <enregistrement> --analyze-only`.
+- Nettoyage d'une voix (coupe-bas 80 Hz, débruitage `afftdn` appris sur le silence de début, coupe des silences de bord, de-esser, compression, gain fixe + limiteur, −16 LUFS, WAV 48 kHz 24 bits) : `.venv\Scripts\python.exe tools\clean_voice.py <enregistrement>`. Sortie : `<nom>-clean.wav` et `<nom>-clean.report.json`. Options : `--no-denoise` (entrée déjà nettoyée par Adobe), `--noise-sample 0.2-1.8`, `--denoise-strength 12`, `--no-trim`.
 - Recalculer les TC et la durée estimée des scripts (après toute modification du texte prononcé) : `py tools/estimate_timecodes.py exercises/exercise-1/video-*/script.md`. Dans Git Bash, préfixer par `PYTHONIOENCODING=utf-8` si la console affiche mal les accents.
