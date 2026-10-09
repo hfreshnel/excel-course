@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompteur</title>
+<style>
+	:root {
+		--font-size: 44px;
+		--bg: #0b0b0d;
+		--fg: #f4f1ea;
+		--muted: #a8a59d;
+		--accent: #f5c542;
+		--hint: #7fb7ff;
+		--panel: #18181c;
+		--border: #34343c;
+		color-scheme: dark;
+	}
+	* { box-sizing: border-box; }
+	html, body {
+		margin: 0;
+		height: 100%;
+		overflow: hidden;
+		background: var(--bg);
+		color: var(--fg);
+		font-family: "Segoe UI", system-ui, sans-serif;
+	}
+	#toolbar {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 3;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 18px;
+		padding: 8px 16px;
+		background: rgba(24, 24, 28, 0.94);
+		border-bottom: 1px solid var(--border);
+		font-size: 14px;
+		transition: opacity 0.3s;
+	}
+	body[data-state="playing"] #toolbar,
+	body[data-state="countdown"] #toolbar { opacity: 0; }
+	body[data-state="playing"] #toolbar:hover { opacity: 1; }
+	#toolbar .group { display: inline-flex; align-items: center; gap: 6px; }
+	#toolbar button, #toolbar select, #toolbar input {
+		font: inherit;
+		color: inherit;
+		background: #26262c;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 4px 10px;
+	}
+	#toolbar button, #toolbar select { cursor: pointer; }
+	#toolbar input[type="number"] { width: 4em; }
+	#toolbar input[type="checkbox"] { padding: 0; }
+	#wpmOut { min-width: 2.5em; text-align: center; font-variant-numeric: tabular-nums; }
+	#stage {
+		position: fixed;
+		inset: 0;
+		overflow: hidden;
+	}
+	#stage.mirrored { transform: scaleX(-1); }
+	#content {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		margin: 0 auto;
+		width: min(90vw, 28em);
+		font-size: var(--font-size);
+		will-change: transform;
+	}
+	#content h1 {
+		margin: 0 0 1.2em;
+		font-size: 0.55em;
+		font-weight: 600;
+		color: var(--accent);
+	}
+	.para {
+		margin: 0 0 1.1em;
+		opacity: 0.3;
+		transition: opacity 0.25s;
+		cursor: pointer;
+	}
+	.para.active { opacity: 1; }
+	.meta {
+		display: flex;
+		gap: 0.8em;
+		margin-bottom: 0.3em;
+		font-size: 0.36em;
+		color: var(--muted);
+		font-variant-numeric: tabular-nums;
+	}
+	.hint { display: none; color: var(--hint); font-style: italic; }
+	body.show-hints .hint { display: inline; }
+	.text {
+		margin: 0;
+		line-height: 1.4;
+		font-weight: 500;
+	}
+	.end {
+		padding-bottom: 100vh;
+		font-size: 0.45em;
+		color: var(--muted);
+		text-align: center;
+	}
+	#readingBand {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 35%;
+		height: calc(var(--font-size) * 1.5);
+		transform: translateY(-50%);
+		background: rgba(245, 197, 66, 0.07);
+		border-top: 1px solid rgba(245, 197, 66, 0.25);
+		border-bottom: 1px solid rgba(245, 197, 66, 0.25);
+		pointer-events: none;
+	}
+	#readingBand::before, #readingBand::after {
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
+		font-size: 24px;
+		color: var(--accent);
+	}
+	#readingBand::before { content: "▶"; left: 10px; }
+	#readingBand::after { content: "◀"; right: 10px; }
+	#status {
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		z-index: 3;
+		padding: 6px 16px;
+		font-size: 13px;
+		color: var(--muted);
+		background: rgba(11, 11, 13, 0.88);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	#overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 4;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 16px;
+		padding: 16px;
+		text-align: center;
+		background: rgba(11, 11, 13, 0.95);
+	}
+	#overlay.silence { background: rgba(72, 10, 14, 0.95); }
+	#overlay[hidden], #help[hidden] { display: none; }
+	#overlayTitle { font-size: 40px; font-weight: 600; }
+	#overlayCount { font-size: 160px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+	#overlayHint { font-size: 18px; color: var(--muted); }
+	#help {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		z-index: 5;
+		transform: translate(-50%, -50%);
+		width: min(680px, calc(100vw - 32px));
+		max-height: calc(100vh - 32px);
+		overflow: auto;
+		padding: 20px 24px;
+		background: var(--panel);
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		font-size: 15px;
+		line-height: 1.5;
+	}
+	#help h2 { margin: 0 0 12px; font-size: 20px; }
+	#help h3 { margin: 18px 0 6px; font-size: 16px; color: var(--accent); }
+	#help table { border-collapse: collapse; }
+	#help td { padding: 3px 12px 3px 0; vertical-align: top; }
+	#help ul { margin: 0; padding-left: 20px; }
+	kbd {
+		display: inline-block;
+		min-width: 1.6em;
+		padding: 1px 6px;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		background: #26262c;
+		font: 13px Consolas, monospace;
+		text-align: center;
+	}
+</style>
+</head>
+<body data-state="idle">
+<header id="toolbar">
+	<select id="videoSelect" title="Vidéo"></select>
+	<span class="group">Vitesse
+		<button type="button" data-action="slower" title="Flèche bas">−</button>
+		<output id="wpmOut"></output>
+		<button type="button" data-action="faster" title="Flèche haut">+</button>
+		mots/min
+	</span>
+	<span class="group">Taille
+		<button type="button" data-action="smaller" title="Touche -">A−</button>
+		<button type="button" data-action="larger" title="Touche +">A+</button>
+	</span>
+	<label class="group"><input type="checkbox" id="hintsToggle"> Indications écran</label>
+	<label class="group"><input type="checkbox" id="mirrorToggle"> Miroir</label>
+	<label class="group">Délai avant silence <input type="number" id="leadInput" min="0" max="30" step="1"> s</label>
+	<button type="button" data-action="fullscreen" title="Touche F">Plein écran</button>
+	<button type="button" data-action="help" title="Touche ?">Aide</button>
+</header>
+<main id="stage">
+	<div id="content"></div>
+	<div id="readingBand"></div>
+</main>
+<footer id="status"></footer>
+<div id="overlay" hidden>
+	<div id="overlayTitle"></div>
+	<div id="overlayCount"></div>
+	<div id="overlayHint"></div>
+</div>
+<section id="help" hidden>
+	<h2>Prompteur</h2>
+	<table>
+		<tr><td><kbd>Espace</kbd></td><td>Démarrer une prise (compte à rebours) / pause / reprise</td></tr>
+		<tr><td><kbd>Entrée</kbd></td><td>Nouvelle prise depuis le paragraphe affiché (compte à rebours)</td></tr>
+		<tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Vitesse ± 5 mots/min</td></tr>
+		<tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Début du paragraphe / paragraphe précédent / suivant</td></tr>
+		<tr><td>Molette, clic</td><td>Déplacer le texte / sauter à un paragraphe</td></tr>
+		<tr><td><kbd>+</kbd> <kbd>-</kbd></td><td>Taille du texte</td></tr>
+		<tr><td><kbd>H</kbd></td><td>Afficher les indications « À l'écran »</td></tr>
+		<tr><td><kbd>M</kbd></td><td>Miroir (vitre de prompteur)</td></tr>
+		<tr><td><kbd>F</kbd></td><td>Plein écran</td></tr>
+		<tr><td><kbd>R</kbd></td><td>Retour au début de la vidéo</td></tr>
+		<tr><td><kbd>Échap</kbd></td><td>Pause, annulation du compte à rebours, fermeture de l'aide</td></tr>
+	</table>
+	<h3>Déroulé d'une prise</h3>
+	<ul>
+		<li><kbd>Espace</kbd>, puis lance l'enregistrement du téléphone pendant le délai affiché.</li>
+		<li>Écran rouge : silence complet. Ces secondes servent au profil de bruit du nettoyage.</li>
+		<li>Lis ce qui passe dans la bande jaune. La vitesse ignore les pauses de ponctuation, ajoutées à part.</li>
+		<li>Une erreur ? <kbd>←</kbd> revient au début du paragraphe avec une seconde d'attente : relis-le en entier, la coupe se fera au montage.</li>
+	</ul>
+	<h3>Bruit des touches</h3>
+	<ul>
+		<li>Les clics du clavier s'entendent dans l'enregistrement. Évite d'en taper pendant une phrase, plutôt entre deux paragraphes.</li>
+		<li>Règle la vitesse sur une lecture d'essai, sans enregistrer.</li>
+	</ul>
+	<p id="generatedAt"></p>
+</section>
+<script>
+"use strict";
+const DATA = /*__TELEPROMPTER_DATA__*/null;
+const STORAGE_KEY = "teleprompter.settings";
+const READING_LINE_RATIO = 0.35;
+const SILENCE_SECONDS = 3;
+const RESUME_HOLD_MS = 1000;
+const PARAGRAPH_GAP_BEATS = 1.2;
+const SENTENCE_PAUSE_BEATS = 0.6;
+const CLAUSE_PAUSE_BEATS = 0.4;
+const COMMA_PAUSE_BEATS = 0.25;
+const RESTART_PARAGRAPH_THRESHOLD_BEATS = 1.5;
+const WPM_STEP = 5;
+const WPM_MIN = 60;
+const WPM_MAX = 260;
+const FONT_STEP = 4;
+const FONT_MIN = 20;
+const FONT_MAX = 120;
+const LEAD_MAX_SECONDS = 30;
+const MAX_FRAME_SECONDS = 0.1;
+const DEFAULT_SETTINGS = { videoId: null, wpm: 140, fontSize: 44, mirror: false, hints: false, leadSeconds: 5 };
+const WORD_PATTERN = /[\p{L}\p{N}]/u;
+const SENTENCE_END_PATTERN = /[.!?…]["»”)]*$/;
+const CLAUSE_END_PATTERN = /[:;]["»”)]*$/;
+const COMMA_END_PATTERN = /,["»”)]*$/;
+const STATE_LABELS = { idle: "Prêt", countdown: "Compte à rebours", playing: "Lecture", paused: "Pause", ended: "Fin" };
+
+const byId = id => document.getElementById(id);
+const stage = byId("stage");
+const content = byId("content");
+const statusBar = byId("status");
+const overlay = byId("overlay");
+const overlayTitle = byId("overlayTitle");
+const overlayCount = byId("overlayCount");
+const overlayHint = byId("overlayHint");
+const helpPanel = byId("help");
+const videoSelect = byId("videoSelect");
+const wpmOut = byId("wpmOut");
+const hintsToggle = byId("hintsToggle");
+const mirrorToggle = byId("mirrorToggle");
+const leadInput = byId("leadInput");
+
+let settings = loadSettings();
+let video = null;
+let paragraphElements = [];
+let segments = [];
+let geometry = [];
+let totalBeats = 0;
+let beat = 0;
+let state = "idle";
+let holdUntil = 0;
+let lastFrame = 0;
+let elapsedMs = 0;
+let countdown = null;
+let activeIndex = -1;
+let lastStatus = "";
+let wakeLock = null;
+
+function loadSettings() {
+	try {
+		const raw = localStorage.getItem(STORAGE_KEY);
+		return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS };
+	} catch (error) {
+		console.warn("Settings not loaded", error);
+		return { ...DEFAULT_SETTINGS };
+	}
+}
+
+function saveSettings() {
+	try {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+	} catch (error) {
+		console.warn("Settings not saved", error);
+	}
+}
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+function formatClock(totalSeconds) {
+	const seconds = Math.max(0, Math.round(totalSeconds));
+	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+// Reading time in "beats": one per spoken word, plus fractional beats for punctuation pauses
+function textBeats(text) {
+	let total = 0;
+	for (const token of text.split(/\s+/)) {
+		if (!token) continue;
+		let weight = WORD_PATTERN.test(token) ? 1 : 0;
+		if (SENTENCE_END_PATTERN.test(token)) weight += SENTENCE_PAUSE_BEATS;
+		else if (CLAUSE_END_PATTERN.test(token)) weight += CLAUSE_PAUSE_BEATS;
+		else if (COMMA_END_PATTERN.test(token)) weight += COMMA_PAUSE_BEATS;
+		total += weight;
+	}
+	return total;
+}
+
+function renderContent() {
+	content.replaceChildren();
+	const title = document.createElement("h1");
+	title.textContent = video.title;
+	content.append(title);
+	paragraphElements = video.rows.map((row, index) => {
+		const section = document.createElement("section");
+		section.className = "para";
+		section.dataset.index = String(index);
+		const meta = document.createElement("div");
+		meta.className = "meta";
+		const timecode = document.createElement("span");
+		timecode.textContent = `${index + 1}/${video.rows.length} · ${row.tc}`;
+		const hint = document.createElement("span");
+		hint.className = "hint";
+		hint.textContent = row.screen;
+		meta.append(timecode, hint);
+		const text = document.createElement("p");
+		text.className = "text";
+		text.textContent = row.text;
+		section.append(meta, text);
+		content.append(section);
+		return section;
+	});
+	const end = document.createElement("div");
+	end.className = "end";
+	end.textContent = "— Fin de la vidéo —";
+	content.append(end);
+	activeIndex = -1;
+}
+
+function loadVideo(videoId) {
+	video = DATA.videos.find(candidate => candidate.id === videoId) || DATA.videos[0];
+	settings.videoId = video.id;
+	saveSettings();
+	videoSelect.value = video.id;
+	document.title = `Prompteur · ${video.title}`;
+	segments = [];
+	let start = 0;
+	video.rows.forEach((row, index) => {
+		const words = textBeats(row.text);
+		const gap = index < video.rows.length - 1 ? PARAGRAPH_GAP_BEATS : 0;
+		segments.push({ start, words, gap });
+		start += words + gap;
+	});
+	totalBeats = start;
+	renderContent();
+	countdown = null;
+	beat = 0;
+	elapsedMs = 0;
+	setState("idle");
+	measure();
+}
+
+function measure() {
+	const contentTop = content.getBoundingClientRect().top;
+	geometry = paragraphElements.map(section => {
+		const text = section.querySelector(".text");
+		const rect = text.getBoundingClientRect();
+		const lineHeight = parseFloat(getComputedStyle(text).lineHeight) || rect.height;
+		const top = rect.top - contentTop;
+		return { first: top + lineHeight / 2, last: top + Math.max(rect.height - lineHeight / 2, lineHeight / 2) };
+	});
+}
+
+function paragraphAt(position) {
+	for (let index = segments.length - 1; index > 0; index--) {
+		if (segments[index].start <= position) return index;
+	}
+	return 0;
+}
+
+// Vertical position (content pixels) that must sit on the reading line: linear through a
+// paragraph's lines, then across the gap to the next paragraph's first line
+function offsetAt(position) {
+	const index = paragraphAt(position);
+	const segment = segments[index];
+	const shape = geometry[index];
+	if (!segment || !shape) return 0;
+	const into = position - segment.start;
+	if (into <= segment.words) {
+		const fraction = segment.words > 0 ? into / segment.words : 1;
+		return shape.first + fraction * (shape.last - shape.first);
+	}
+	const next = geometry[index + 1];
+	if (!next) return shape.last;
+	const fraction = clamp((into - segment.words) / segment.gap, 0, 1);
+	return shape.last + fraction * (next.first - shape.last);
+}
+
+function activeParagraph(position) {
+	const index = paragraphAt(position);
+	const segment = segments[index];
+	const pastMidGap = position - segment.start > segment.words + segment.gap / 2;
+	return pastMidGap && index < segments.length - 1 ? index + 1 : index;
+}
+
+function updateView() {
+	if (!video) return;
+	const readingY = stage.clientHeight * READING_LINE_RATIO;
+	content.style.transform = `translate3d(0, ${(readingY - offsetAt(beat)).toFixed(1)}px, 0)`;
+	const nextActive = activeParagraph(beat);
+	if (nextActive !== activeIndex) {
+		paragraphElements[activeIndex]?.classList.remove("active");
+		paragraphElements[nextActive]?.classList.add("active");
+		activeIndex = nextActive;
+	}
+	const remainingSeconds = (totalBeats - beat) * 60 / settings.wpm;
+	const status = [
+		STATE_LABELS[state],
+		video.title,
+		`paragraphe ${activeIndex + 1}/${segments.length}`,
+		`prise ${formatClock(elapsedMs / 1000)}`,
+		`reste ≈ ${formatClock(remainingSeconds)}`,
+		`${settings.wpm} mots/min`,
+		"? aide",
+	].join("  ·  ");
+	if (status !== lastStatus) {
+		statusBar.textContent = status;
+		lastStatus = status;
+	}
+}
+
+async function setWakeLock(enabled) {
+	try {
+		if (enabled && !wakeLock && "wakeLock" in navigator) {
+			wakeLock = await navigator.wakeLock.request("screen");
+			wakeLock.addEventListener("release", () => { wakeLock = null; });
+		} else if (!enabled && wakeLock) {
+			await wakeLock.release();
+			wakeLock = null;
+		}
+	} catch (error) {
+		console.warn("Wake lock unavailable", error);
+	}
+}
+
+function setState(next) {
+	state = next;
+	document.body.dataset.state = next;
+	overlay.hidden = next !== "countdown";
+	if (next === "playing" || next === "countdown") setWakeLock(true);
+	else if (next === "idle" || next === "ended") setWakeLock(false);
+}
+
+function startTake() {
+	if (state === "ended") beat = 0;
+	elapsedMs = 0;
+	const now = performance.now();
+	countdown = settings.leadSeconds > 0
+		? { phase: "lead", endsAt: now + settings.leadSeconds * 1000 }
+		: { phase: "silence", endsAt: now + SILENCE_SECONDS * 1000 };
+	setState("countdown");
+	renderCountdown(now);
+}
+
+function cancelCountdown() {
+	countdown = null;
+	setState("idle");
+}
+
+function renderCountdown(now) {
+	if (countdown.endsAt - now <= 0) {
+		if (countdown.phase === "lead") {
+			countdown = { phase: "silence", endsAt: now + SILENCE_SECONDS * 1000 };
+		} else {
+			countdown = null;
+			holdUntil = 0;
+			setState("playing");
+			return;
+		}
+	}
+	const isSilence = countdown.phase === "silence";
+	overlay.classList.toggle("silence", isSilence);
+	overlayTitle.textContent = isSilence ? "Silence" : "Lance l'enregistrement du téléphone";
+	overlayCount.textContent = String(Math.ceil((countdown.endsAt - now) / 1000));
+	overlayHint.textContent = isSilence
+		? "Ne bouge pas, ne parle pas : profil de bruit en cours"
+		: `Puis ${SILENCE_SECONDS} s de silence avant le texte · Échap pour annuler`;
+}
+
+function togglePlay() {
+	if (state === "idle" || state === "ended") startTake();
+	else if (state === "countdown") cancelCountdown();
+	else if (state === "playing") setState("paused");
+	else if (state === "paused") {
+		holdUntil = performance.now() + RESUME_HOLD_MS;
+		setState("playing");
+	}
+}
+
+function moveTo(position) {
+	beat = clamp(position, 0, totalBeats);
+	if (state === "playing") holdUntil = performance.now() + RESUME_HOLD_MS;
+	if (state === "ended" && beat < totalBeats) setState("paused");
+}
+
+function jumpParagraph(direction) {
+	if (state === "countdown") return;
+	const index = paragraphAt(beat);
+	const into = beat - segments[index].start;
+	const target = direction < 0
+		? (into > RESTART_PARAGRAPH_THRESHOLD_BEATS ? index : Math.max(index - 1, 0))
+		: Math.min(index + 1, segments.length - 1);
+	moveTo(segments[target].start);
+}
+
+function resetVideo() {
+	countdown = null;
+	beat = 0;
+	elapsedMs = 0;
+	setState("idle");
+}
+
+function applySettings() {
+	document.documentElement.style.setProperty("--font-size", `${settings.fontSize}px`);
+	stage.classList.toggle("mirrored", settings.mirror);
+	document.body.classList.toggle("show-hints", settings.hints);
+	hintsToggle.checked = settings.hints;
+	mirrorToggle.checked = settings.mirror;
+	wpmOut.textContent = String(settings.wpm);
+	leadInput.value = String(settings.leadSeconds);
+	saveSettings();
+	if (video) measure();
+}
+
+function changeWpm(delta) {
+	settings.wpm = clamp(settings.wpm + delta, WPM_MIN, WPM_MAX);
+	applySettings();
+}
+
+function changeFont(delta) {
+	settings.fontSize = clamp(settings.fontSize + delta, FONT_MIN, FONT_MAX);
+	applySettings();
+}
+
+function toggleSetting(name) {
+	settings[name] = !settings[name];
+	applySettings();
+}
+
+function toggleFullscreen() {
+	const request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+	request.catch(error => console.warn("Fullscreen failed", error));
+}
+
+function frame(now) {
+	const deltaSeconds = lastFrame ? Math.min((now - lastFrame) / 1000, MAX_FRAME_SECONDS) : 0;
+	lastFrame = now;
+	try {
+		if (state === "countdown") {
+			renderCountdown(now);
+		} else if (state === "playing") {
+			elapsedMs += deltaSeconds * 1000;
+			if (now >= holdUntil) {
+				beat = Math.min(beat + deltaSeconds * settings.wpm / 60, totalBeats);
+				if (beat >= totalBeats) setState("ended");
+			}
+		}
+		updateView();
+	} catch (error) {
+		console.error("Frame failed", error);
+	}
+	requestAnimationFrame(frame);
+}
+
+window.addEventListener("keydown", event => {
+	const target = event.target;
+	if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) {
+		if (event.key === "Escape" || event.key === "Enter") target.blur();
+		return;
+	}
+	if (event.ctrlKey || event.altKey || event.metaKey) return;
+	let handled = true;
+	switch (event.key) {
+		case " ": togglePlay(); break;
+		case "Enter": if (state !== "countdown") startTake(); break;
+		case "Escape":
+			if (!helpPanel.hidden) helpPanel.hidden = true;
+			else if (state === "countdown") cancelCountdown();
+			else if (state === "playing") setState("paused");
+			break;
+		case "ArrowUp": changeWpm(WPM_STEP); break;
+		case "ArrowDown": changeWpm(-WPM_STEP); break;
+		case "ArrowLeft": case "PageUp": jumpParagraph(-1); break;
+		case "ArrowRight": case "PageDown": jumpParagraph(1); break;
+		case "Home": if (state !== "countdown") moveTo(0); break;
+		case "+": case "=": changeFont(FONT_STEP); break;
+		case "-": changeFont(-FONT_STEP); break;
+		case "h": case "H": toggleSetting("hints"); break;
+		case "m": case "M": toggleSetting("mirror"); break;
+		case "f": case "F": toggleFullscreen(); break;
+		case "r": case "R": resetVideo(); break;
+		case "?": helpPanel.hidden = !helpPanel.hidden; break;
+		default: handled = false;
+	}
+	if (handled) event.preventDefault();
+});
+
+stage.addEventListener("wheel", event => {
+	event.preventDefault();
+	if (state === "countdown") return;
+	const pixelsPerBeat = Math.max(Math.abs(offsetAt(beat + 0.25) - offsetAt(beat - 0.25)) / 0.5, 1);
+	moveTo(beat + event.deltaY / pixelsPerBeat);
+}, { passive: false });
+
+content.addEventListener("click", event => {
+	const section = event.target.closest(".para");
+	if (!section || state === "countdown") return;
+	moveTo(segments[Number(section.dataset.index)].start);
+});
+
+document.getElementById("toolbar").addEventListener("click", event => {
+	const button = event.target.closest("button[data-action]");
+	if (!button) return;
+	const actions = {
+		slower: () => changeWpm(-WPM_STEP),
+		faster: () => changeWpm(WPM_STEP),
+		smaller: () => changeFont(-FONT_STEP),
+		larger: () => changeFont(FONT_STEP),
+		fullscreen: toggleFullscreen,
+		help: () => { helpPanel.hidden = !helpPanel.hidden; },
+	};
+	actions[button.dataset.action]?.();
+	// Keep Space bound to play/pause instead of re-clicking the focused button
+	button.blur();
+});
+
+videoSelect.addEventListener("change", () => {
+	loadVideo(videoSelect.value);
+	videoSelect.blur();
+});
+hintsToggle.addEventListener("change", () => { settings.hints = hintsToggle.checked; applySettings(); hintsToggle.blur(); });
+mirrorToggle.addEventListener("change", () => { settings.mirror = mirrorToggle.checked; applySettings(); mirrorToggle.blur(); });
+leadInput.addEventListener("change", () => {
+	const value = Number.parseInt(leadInput.value, 10);
+	settings.leadSeconds = Number.isFinite(value) ? clamp(value, 0, LEAD_MAX_SECONDS) : DEFAULT_SETTINGS.leadSeconds;
+	applySettings();
+});
+window.addEventListener("resize", () => { if (video) measure(); });
+document.addEventListener("visibilitychange", () => {
+	if (document.visibilityState === "visible" && (state === "playing" || state === "countdown")) setWakeLock(true);
+});
+
+function init() {
+	if (!DATA || !Array.isArray(DATA.videos) || DATA.videos.length === 0) {
+		statusBar.textContent = "Aucun script : générer la page avec tools/build_teleprompter.py";
+		return;
+	}
+	for (const entry of DATA.videos) {
+		const option = document.createElement("option");
+		option.value = entry.id;
+		option.textContent = entry.title;
+		videoSelect.append(option);
+	}
+	byId("generatedAt").textContent = `Généré le ${DATA.generatedAt}. Après une modification des scripts, relancer tools/build_teleprompter.py.`;
+	applySettings();
+	loadVideo(settings.videoId);
+	document.fonts?.ready.then(measure).catch(error => console.warn("Fonts not ready", error));
+	requestAnimationFrame(frame);
+}
+
+init();
+</script>
+</body>
+</html>
