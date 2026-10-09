@@ -29,6 +29,22 @@ export type TypingCard = {
 	targetRect: PixelRect;
 };
 
+export type AvatarCue = {
+	pose: string;
+	start: number;
+};
+
+// Pose images share one canvas size; the character is anchored on the bottom edge of the frame
+export type AvatarData = {
+	poses: Record<string, string>;
+	imageWidth: number;
+	imageHeight: number;
+	height: number;
+	left: number;
+	defaultPose: string;
+	cues: AvatarCue[];
+};
+
 // Times are in seconds of video time; rectangles are in capture pixels
 export type LessonData = {
 	fps: number;
@@ -39,6 +55,7 @@ export type LessonData = {
 	audio: { src: string; delay: number };
 	highlights: Highlight[];
 	typingCards: TypingCard[];
+	avatar?: AvatarData;
 };
 
 export const defaultLessonData: LessonData = {

@@ -29,23 +29,30 @@ Ne pas les remettre en cause sans validation explicite de Wilfried.
 
 **Avatar**
 - Homme, noir, nommé « Professeur Ex ». Préciser « homme » dans les prompts d'image : les générateurs produisent souvent une femme par défaut.
-- Piste initiale : tête de chibi 2D. Wilfried teste maintenant plusieurs niveaux de réalisme (du chibi au photoréalisme) pour retenir **le plus simple à qualité maximale**. Le chibi n'est pas acquis.
-- Générateurs d'images testés : GPT, Gemini, Midjourney, Hedra. **Pas de plan HeyGen actuellement** (à tester d'abord comme outil d'animation).
+- **Style retenu (décision du 2026-10-08) : chibi 2D.** Le photoréalisme et les niveaux de réalisme intermédiaires sont abandonnés.
+- **Pas d'animation fluide** : l'avatar s'anime par une bibliothèque de **poses clés et d'expressions du visage** (images fixes), choisies pour souligner le discours et enchaînées au compositing.
+- **Bouche fixe pour commencer** : pas de synchronisation labiale (piste ultérieure : Rhubarb Lip Sync, mode phonétique, non testé en français).
+- **Images générées avec GPT.** Générateurs déjà testés : GPT, Gemini, Midjourney, Hedra.
+- Apparence (portrait de référence du 2026-10-08) : peau brun foncé, cheveux noirs courts très frisés, lunettes rondes à monture fine noire, barbe courte reliée à la moustache, cardigan bleu marine ouvert sur une chemise blanche à col. Images complètes (pas de calques), **cadrage à mi-corps** (tête à la taille, bras et mains visibles), fond transparent. Le corps n'est pas animé : Remotion change d'image au bon mot et ajoute un mouvement d'ensemble léger (respiration, balancement).
+- **Placement : en bas à gauche** pendant les manipulations Excel. Déplacements ponctuels envisagés par Wilfried (non tranché). La pose `point` désigne donc le haut et la droite de l'image.
+- Poses : ids en anglais (`assets/avatar/prompts.md`). **Lot 1 généré le 2026-10-08** : `neutral`, `welcome`, `explain`, `point`, `warning`, `cheer`.
+- **Normalisation (option A, validée le 2026-10-08)** : cadrage de GPT conservé tel quel ; seuls la transparence (opacité pleine, voile et lueur du fond supprimés) et le format (1024×1536, ancré en bas) sont unifiés. Le décalage de tête de `point` (corps tourné) est accepté.
+- **Changement de pose : coupe franche + petit rebond** (spring, échelle 0,93 → 1). Le fondu enchaîné a été écarté : il dédoublait la tête quand le corps tourne. Mouvement continu : respiration (±1,2 % en hauteur, 3,6 s) et balancement (±0,6°, 5,3 s). Entrée par glissement depuis le bas au début de la vidéo. Hauteur à l'écran 420 px, 24 px du bord gauche.
 **Voix** (décision du 2026-10-08)
 - La voix SAPI est trop mécanique. Wilfried **enregistre lui-même les scripts au téléphone**, et sa voix devient l'horloge de référence de chaque vidéo. Il doute de sa diction et de son aura à l'oral : un modificateur de voix (conversion parole vers parole, ex. ElevenLabs Voice Changer) reste à évaluer après un premier test. Il ne change que le timbre, pas la diction.
 - Chaîne visée : enregistrement → montage → nettoyage (`tools/clean_voice.py`, ou Adobe Enhance Speech puis `--no-denoise`) → [modificateur de voix] → alignement Whisper → `markers.json`. L'alignement se fait sur l'audio **final**.
 - Consignes d'enregistrement : **2 s de silence au début** de chaque prise (le profil de bruit y est appris), pièce petite et garnie de tissus, téléphone à 15-20 cm, format sans perte si l'application le permet.
-- Piste explorée : **transfert de performance** (Wilfried performeur, personnage généré par IA, voix remplacée si pas assez impactante) plutôt qu'avatar piloté par l'audio. Outils gratuits/open source en self-build acceptés.
+- **Transfert de performance abandonné** (2026-10-08) au profit de l'avatar en poses clés.
 
 ## 3. Architecture cible du pipeline
 
 ```
 script (texte + indications écran)
-   → audio / vidéo avatar (HeyGen ou alternative)
+   → voix enregistrée par Wilfried (nettoyée)
    → timestamps mot-à-mot (Whisper)
    → timeline (fichier de pilotage)
    → automatisation Excel + capture d'écran (Windows)
-   → compositing (Remotion) : surbrillances, avatar, titres d'étape
+   → compositing (Remotion) : surbrillances, avatar en poses clés, titres d'étape
    → export final
 ```
 
@@ -60,6 +67,7 @@ script (texte + indications écran)
 **Décisions du 2026-10-06** (validées par Wilfried)
 - Formules saisies de façon **instantanée** (`Range.Formula2Local` d'un coup), pas de frappe simulée.
 - Ancrage des actions par **marqueurs dans le texte prononcé** : `{@nom}` déclenche l'action au début du mot qui suit. Chaque ligne du tableau porte aussi un marqueur implicite `r1`, `r2`… Les marqueurs ne sont jamais prononcés (`tools/video_script.py` les retire).
+- **Poses de l'avatar dans le texte prononcé (décision du 2026-10-08)** : `{pose:id}` change de pose au début du mot qui suit ; la pose dure **jusqu'à la fin de la phrase** (`.`, `!`, `?`, `…`, ou fin de ligne), puis retour à `neutral`. Pour la prolonger, la répéter sur la phrase suivante. Ajustements automatiques : pose maintenue 0,3 s après le dernier mot (sans chevaucher le mot suivant), même pose répétée à moins de 1,5 s fusionnée, retour à `neutral` de moins de 1 s supprimé. Un id inconnu ou mal formé arrête le rendu avec une erreur explicite ; `stripMarkers` retire tout `{pose:…}`, même mal formé.
 - Les scripts de l'exercice 1 sont **figés** (texte prononcé). Seuls des marqueurs y sont ajoutés.
 - **Zoom Excel des prises : 90 %** (colonnes A à P visibles en 1920×1020).
 - **Saisies en incrustation** (rendu en post, Excel reste en saisie instantanée) :
@@ -74,13 +82,13 @@ script (texte + indications écran)
 - `recordings/voice/markers.json` : `{source, audio, duration, markers: {nom: secondes}, words: [{text, start, end}]}`. Produit aujourd'hui par la voix provisoire (`System.Speech`, voix Hortense, **16 kHz obligatoire** : `AudioPosition` est calculé à la fréquence native de la voix, toute autre fréquence de sortie fausse les positions des mots). Les événements SAPI ne parviennent pas à pywin32, d'où le passage par `tools/sapi_synthesize.ps1`. L'alignement Whisper produira le même format.
 - `recordings/take-*/log.json` : instant prévu et réel de chaque événement (`plannedTime`, `actualTime`, `jitter`), `plannedEnd` des surbrillances et `rects` en pixels relatifs à la zone capturée, avec une auto-vérification `check` par `RangeFromPoint`. Base de temps : secondes depuis le début de l'audio ; temps vidéo = temps audio + `leadIn`.
 - `render_preview.py` produit un **aperçu de contrôle** ffmpeg (capture + voix + rectangles, contours cyan des actions), pas le rendu final.
-- `tools/render_lesson.py` construit `take-*/composition.json` (surbrillances et cartes de saisie, temps en secondes vidéo, rectangles en pixels de capture) puis lance le rendu Remotion (`compositing/`, composition `ExcelLesson`, `--public-dir` = dossier de prise). Les mots du script sont alignés sur les mots horodatés par `difflib.SequenceMatcher` (tolérant aux écarts de transcription) ; les mots non appariés sont interpolés. Dictée d'une formule : texte après le dernier « saisissez » qui précède le marqueur de l'événement, jusqu'à la fin de phrase ou « , puis », découpé aux virgules ; le nombre de morceaux doit égaler le nombre de jetons de la formule, sinon erreur explicite. Champ facultatif `dictationFrom` (marqueur) pour les dictées sans « saisissez ».
+- `tools/render_lesson.py` construit `take-*/composition.json` (surbrillances et cartes de saisie, temps en secondes vidéo, rectangles en pixels de capture) puis lance le rendu Remotion (`compositing/`, composition `ExcelLesson`, `--public-dir` = dossier de prise). Les mots du script sont alignés sur les mots horodatés par `difflib.SequenceMatcher` (tolérant aux écarts de transcription) ; les mots non appariés sont interpolés. Dictée d'une formule : texte après le dernier « saisissez » qui précède le marqueur de l'événement, jusqu'à la fin de phrase ou « , puis », découpé aux virgules ; le nombre de morceaux doit égaler le nombre de jetons de la formule, sinon erreur explicite. Champ facultatif `dictationFrom` (marqueur) pour les dictées sans « saisissez ». L'avatar est ajouté si `assets/avatar/normalized/manifest.json` existe (poses copiées dans `take-*/avatar/`, bloc `avatar` : poses, hauteur, position, `defaultPose`, `cues` `{pose, start}` construits depuis les marqueurs `{pose:id}` et les fins de mots horodatées).
 
 ## 4. Environnement
 
 - **Repo sous Windows** (`D:\dev\git\excel-course`). Wilfried utilise aussi WSL pour ce projet : ne pas accéder aux fichiers du repo depuis WSL via `/mnt/d` pour des traitements lourds (lent). Décider et documenter où tourne chaque outil.
 - Outils constatés côté Windows (2026-10-05) : Python 3.14.3 (gestionnaire d'installation Python, lanceur `py` ; `python` dans Git Bash résout d'abord l'alias Microsoft Store), Node 24.11.1, Git 2.52, Git LFS 3.7.1. `uv` non installé.
-- Ajoutés le 2026-10-06 : **ffmpeg 9.0.2** (`winget install Gyan.FFmpeg` ; le PATH n'est à jour que dans les nouveaux shells, `automation/ffmpeg_tools.py` le trouve aussi via le dossier winget ou `FFMPEG_PATH`) ; venv Python **`.venv` à la racine** (`requirements.txt` : `pywin32` 312).
+- Ajoutés le 2026-10-06 : **ffmpeg 9.0.2** (`winget install Gyan.FFmpeg` ; le PATH n'est à jour que dans les nouveaux shells, `automation/ffmpeg_tools.py` le trouve aussi via le dossier winget ou `FFMPEG_PATH`) ; venv Python **`.venv` à la racine** (`requirements.txt` : `pywin32` 312, `Pillow` 12.3 depuis le 2026-10-08).
 - **Automatisation Excel : côté Windows uniquement** (COM). Excel de bureau M365 requis, pas Excel Online. Bibliothèque retenue : **`pywin32`** (liaison dynamique).
 - Excel constaté : M365 build 20430, interface en français (1036), séparateur de liste `;`, décimal `,`, milliers U+202F. Écran 1920×1080 physiques à **125 %** (DPI 120) ; zone de travail capturée 1920×1020 (barre des tâches exclue).
 - Thème Office de Wilfried : « Utiliser le paramètre système » (Windows en sombre). Pour les prises, `ExcelSession` force temporairement `UI Theme = 0` dans le registre puis restaure la valeur : les **cellules passent en clair** mais le **ruban reste sombre** (le thème M365 synchronisé par le compte l'emporte). Thème des enregistrements à trancher par Wilfried (Fichier > Compte > Thème Office).
@@ -96,6 +104,7 @@ script (texte + indications écran)
 ├── CLAUDE.md
 ├── assets/
 │   ├── client/        # originaux du client, jamais modifiés ni renommés (03-wall.jpg)
+│   ├── avatar/        # Professeur Ex : prompts.md (prompts GPT, liste des poses), poses/<id>.png (originaux GPT, ids en anglais), normalized/ (généré, non versionné)
 │   └── charts-background.jpg   # copie de travail de 03-wall.jpg
 ├── exercises/
 │   ├── exercise-1/
@@ -106,7 +115,7 @@ script (texte + indications écran)
 │   └── exercise-2/    # vide tant que non reçu
 ├── requirements.txt   # dépendances Python (venv .venv à la racine)
 ├── automation/        # Python : pilotage Excel, capture, journal, aperçu de contrôle
-├── compositing/       # Remotion 4.0.533 + @remotion/media (TypeScript, React 19) : ExcelLesson, HighlightBox, FocusBlur, TypingCard
+├── compositing/       # Remotion 4.0.533 + @remotion/media (TypeScript, React 19) : ExcelLesson, HighlightBox, FocusBlur, TypingCard, ProfessorEx ; composition AvatarPreview
 └── tools/             # scripts utilitaires (timestamps, recalage…)
 ```
 
@@ -128,6 +137,7 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 
 - **Git LFS** suit `*.xlsx`, `*.xlsm`, `*.jpg`, `*.jpeg`, `*.png`, `*.mp4`, `*.mov`, `*.webm`, `*.wav`, `*.mp3` (voir `.gitattributes`). Tout nouveau type binaire doit y être ajouté **avant** son premier commit.
 - Les enregistrements, rendus et états régénérables (`recordings/`, `renders/`, `states/`) ne sont pas versionnés (voir `.gitignore`).
+- **Décision du 2026-10-09 : aucune vidéo ni aucun audio sur le git** (trop volumineux, régénérables). Les dossiers restent en place sur le disque. Constat à cette date : aucun média suivi, tous dans `video-XX/recordings/` et `video-XX/renders/`, déjà ignorés.
 
 ## 6. Règles techniques Excel (COM)
 
@@ -178,13 +188,13 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 ## 10. Points ouverts et risques
 
 - **Format d'export de l'avatar** (fond uni, vert, canal alpha ?) : conditionne l'incrustation. À vérifier en premier.
-- **Style final de l'avatar** et outil d'animation non tranchés (voir section 2).
+- **Avatar chibi en poses clés** (voir section 2). Restent ouverts : liste des poses et expressions (proposition du 2026-10-08 à valider), déclenchement des poses depuis les scripts, cohérence du personnage d'une image générée à l'autre. **En bas à gauche, l'avatar masque les onglets de feuilles**, utilisés à l'écran dans les vidéos 1 (création et couleur de D1) et 6 à 9 (feuilles graphiques) : prévoir un déplacement ou une réduction à ces moments.
 - **Relation entre `02-solution.xlsx` et `02-sol.xlsx`** non clarifiée.
 - **Scripts de l'exercice 1** : réécrits (environ 32 min de texte parlé au total), à relire par Wilfried et le collègue. Restent à vérifier dans un vrai Excel : affichage de 100,23 € pour le Prix TTC de janvier, comportement des années (colonne numérique) lors de la création des graphiques en barres et combiné. À confirmer côté client : les élèves reçoivent-ils l'image de fond `03-wall.jpg` ?
 - **Barre de juillet en orange** dans l'histogramme de l'énoncé : raison inconnue, non reprise dans les scripts.
 - **Titres de graphiques en anglais** dans l'énoncé (« Sales », « Evolution », « Years », « Prices ») : conservés, sauf « Périodes » → « Années » (vidéo 8).
 - **Exercice 2** pas encore reçu.
-- **Voix** : qualité de l'enregistrement au téléphone inconnue (premier test à faire). Choix d'un modificateur de voix ouvert. **Conservation des enregistrements bruts** à décider : `recordings/` n'est pas versionné, alors qu'une voix enregistrée ne se régénère pas (ajouter `*.m4a` à LFS si on les versionne). Outil d'alignement Whisper pas encore écrit.
+- **Voix** : qualité de l'enregistrement au téléphone inconnue (premier test à faire). Choix d'un modificateur de voix ouvert. **Conservation des enregistrements bruts** (décision du 2026-10-09) : hors git, **Wilfried sauvegarde lui-même ses prises** (une voix enregistrée ne se régénère pas, contrairement aux autres médias). Outil d'alignement Whisper pas encore écrit.
 - **Dérive de synchronisation** sur les longues manipulations : d'où l'enregistrement par étape.
 - **Qualité « masterclass »** : prévoir une passe de contrôle visuel sur chaque vidéo, un pipeline automatisé produit un rendu propre mais standardisé.
 - **Liaison externe dans `01-data.xlsx`** : les élèves verront l'avertissement « liaisons externes » à l'ouverture. À signaler au client (fichier à nettoyer).
@@ -207,6 +217,8 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 - Aperçu de contrôle : `.venv\Scripts\python.exe automation\render_preview.py exercises\exercise-1\video-03\recordings\take-<horodatage>`.
 - Compositing (une fois) : `cd compositing` puis `npm install`. Vérification des types : `npm run typecheck`. Studio interactif : `npm run studio`.
 - Vidéo finale d'une prise : `.venv\Scripts\python.exe tools\render_lesson.py exercises\exercise-1\video-03\recordings\take-<horodatage>` (`--data-only` pour ne produire que `composition.json`, `--concurrency N`). Sortie : `video-03\renders\lesson-take-<horodatage>.mp4`.
+- Normaliser les poses de l'avatar (après tout ajout ou remplacement dans `assets/avatar/poses/`) : `.venv\Scripts\python.exe tools\normalize_avatar.py`. Sortie : `assets/avatar/normalized/` (`<id>.png` + `manifest.json`). À relancer avant `render_lesson.py`.
+- Aperçu animé des poses (sans prise) : `cd compositing` puis `npm run studio:avatar`, composition `AvatarPreview`.
 - Diagnostic d'un enregistrement de voix (format, niveaux, bruit de fond, saturation) : `.venv\Scripts\python.exe tools\clean_voice.py <enregistrement> --analyze-only`.
 - Nettoyage d'une voix (coupe-bas 80 Hz, débruitage `afftdn` appris sur le silence de début, coupe des silences de bord, de-esser, compression, gain fixe + limiteur, −16 LUFS, WAV 48 kHz 24 bits) : `.venv\Scripts\python.exe tools\clean_voice.py <enregistrement>`. Sortie : `<nom>-clean.wav` et `<nom>-clean.report.json`. Options : `--no-denoise` (entrée déjà nettoyée par Adobe), `--noise-sample 0.2-1.8`, `--denoise-strength 12`, `--no-trim`.
 - Prompteur pour l'enregistrement de la voix (page HTML autonome, toutes les vidéos, marqueurs retirés, défilement automatique en mots/min avec pauses de ponctuation, compte à rebours puis 3 s de silence avant le texte) : `.venv\Scripts\python.exe tools\build_teleprompter.py --open`. Sortie : `exercises\exercise-1\renders\teleprompter.html` (non versionnée, à régénérer après toute modification des scripts). Gabarit : `tools/teleprompter_template.html`. Raccourcis : touche `?` dans la page.

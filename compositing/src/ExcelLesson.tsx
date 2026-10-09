@@ -3,12 +3,13 @@ import { Audio, Video } from "@remotion/media";
 import { AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { FocusBlur } from "./FocusBlur";
 import { HighlightBox } from "./HighlightBox";
+import { ProfessorEx } from "./ProfessorEx";
 import { TypingCard } from "./TypingCard";
 import { fadeOpacity, type LessonData } from "./lesson-data";
 
 const BACKGROUND = "#1B1E24";
 
-export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, typingCards }) => {
+export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, typingCards, avatar }) => {
 	const frame = useCurrentFrame();
 	const { fps } = useVideoConfig();
 	const time = frame / fps;
@@ -32,6 +33,7 @@ export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, 
 					</>
 				) : null}
 			</div>
+			{avatar ? <ProfessorEx avatar={avatar} /> : null}
 			{activeCard ? <TypingCard card={activeCard} time={time} opacity={cardOpacity} /> : null}
 		</AbsoluteFill>
 	);

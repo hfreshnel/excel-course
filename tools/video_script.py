@@ -5,6 +5,10 @@ SPOKEN_COLUMN_INDEX = 2
 EXPECTED_COLUMN_COUNT = 4
 # "{@name}" fires at the start of the word that follows it; markers are never spoken
 MARKER_PATTERN = re.compile(r"\{@([A-Za-z][A-Za-z0-9_]*)\}")
+# "{pose:id}" switches the avatar pose at the start of the next word until the end of the sentence.
+# Stripping is deliberately permissive so a malformed pose marker can never reach the spoken text.
+POSE_MARKER_PATTERN = re.compile(r"\{pose:([^}]*)\}")
+POSE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 ROW_MARKER_PATTERN = re.compile(r"^r\d+$")
 WHITESPACE_PATTERN = re.compile(r"\s+")
 
@@ -19,7 +23,7 @@ def splitRow(line):
 
 
 def stripMarkers(text):
-	return WHITESPACE_PATTERN.sub(" ", MARKER_PATTERN.sub("", text)).strip()
+	return WHITESPACE_PATTERN.sub(" ", POSE_MARKER_PATTERN.sub("", MARKER_PATTERN.sub("", text))).strip()
 
 
 def readRows(scriptPath):

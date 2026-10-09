@@ -19,6 +19,7 @@ out/
 **/recordings/
 **/renders/
 **/states/
+assets/avatar/normalized/
 *.mp4.part
 
 # OS / IDE

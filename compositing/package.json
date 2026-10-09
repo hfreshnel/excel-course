@@ -3,6 +3,7 @@
 	"private": true,
 	"scripts": {
 		"studio": "remotion studio src/index.ts",
+		"studio:avatar": "remotion studio src/index.ts --public-dir=../assets/avatar/normalized",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {

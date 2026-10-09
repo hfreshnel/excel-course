@@ -10,10 +10,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-from video_script import MARKER_PATTERN, SPOKEN_COLUMN_INDEX, readRows, stripMarkers
+from video_script import MARKER_PATTERN, POSE_ID_PATTERN, POSE_MARKER_PATTERN, SPOKEN_COLUMN_INDEX, readRows, stripMarkers
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 COMPOSITING_DIR = REPO_ROOT / "compositing"
+AVATAR_DIR = REPO_ROOT / "assets" / "avatar" / "normalized"
+AVATAR_HEIGHT = 420
+AVATAR_LEFT = 24
+AVATAR_DEFAULT_POSE = "neutral"
+# A pose outlives the last word of its sentence a little, without overlapping the next word
+POSE_HOLD_SECONDS = 0.3
+POSE_MERGE_GAP_SECONDS = 1.5
+NEUTRAL_MIN_SECONDS = 1.0
+SENTENCE_END_PATTERN = re.compile(r"[.!?…](?=\s|$)")
 FPS = 30
 OUTPUT_WIDTH = 1920
 OUTPUT_HEIGHT = 1080
@@ -48,9 +57,44 @@ def readScriptWords(scriptPath):
 		clean = stripMarkers(raw)
 		# Marker offsets are measured in the cleaned text, where they bound the dictation search
 		markerOffsets = {match.group(1): len(stripMarkers(raw[:match.start()])) for match in MARKER_PATTERN.finditer(raw)}
+		poses = []
+		for match in POSE_MARKER_PATTERN.finditer(raw):
+			if not POSE_ID_PATTERN.match(match.group(1)):
+				raise ValueError(f"{scriptPath}:{row['lineNumber']}: invalid pose id '{match.group(1)}' (lowercase kebab-case expected)")
+			poses.append((len(stripMarkers(raw[:match.start()])), match.group(1)))
 		words = [(match.start(), match.group()) for match in WORD_PATTERN.finditer(clean)]
-		rows.append({"clean": clean, "words": words, "markers": markerOffsets})
+		rows.append({"lineNumber": row["lineNumber"], "clean": clean, "words": words, "markers": markerOffsets, "poses": poses})
 	return rows
+
+
+def fillGaps(values):
+	# Unmatched words are interpolated between their matched neighbours
+	known = [index for index, value in enumerate(values) if value is not None]
+	if not known:
+		raise RuntimeError("No script word could be aligned with the audio words")
+	for index in range(len(values)):
+		if values[index] is not None:
+			continue
+		position = bisect.bisect_left(known, index)
+		previous = known[position - 1] if position > 0 else None
+		following = known[position] if position < len(known) else None
+		if previous is None:
+			values[index] = values[following]
+		elif following is None:
+			values[index] = values[previous]
+		else:
+			ratio = (index - previous) / (following - previous)
+			values[index] = values[previous] + ratio * (values[following] - values[previous])
+	return values
+
+
+def splitByRow(rows, values):
+	result = []
+	cursor = 0
+	for row in rows:
+		result.append(values[cursor:cursor + len(row["words"])])
+		cursor += len(row["words"])
+	return result
 
 
 def alignWordTimes(rows, audioWords):
@@ -59,35 +103,16 @@ def alignWordTimes(rows, audioWords):
 	scriptKeys = [normalizeWord(word) for word in scriptWords]
 	audioKeys = [normalizeWord(word["text"]) for word in audioWords]
 	matcher = difflib.SequenceMatcher(None, scriptKeys, audioKeys, autojunk=False)
-	times = [None] * len(scriptWords)
+	starts = [None] * len(scriptWords)
+	ends = [None] * len(scriptWords)
 	for block in matcher.get_matching_blocks():
 		for offset in range(block.size):
-			times[block.a + offset] = audioWords[block.b + offset]["start"]
-	matchedCount = sum(time is not None for time in times)
+			audioWord = audioWords[block.b + offset]
+			starts[block.a + offset] = audioWord["start"]
+			ends[block.a + offset] = audioWord.get("end", audioWord["start"])
+	matchedCount = sum(start is not None for start in starts)
 	logger.info("Aligned %d of %d script words to audio words", matchedCount, len(scriptWords))
-	# Unmatched words are interpolated between their matched neighbours
-	known = [index for index, time in enumerate(times) if time is not None]
-	if not known:
-		raise RuntimeError("No script word could be aligned with the audio words")
-	for index in range(len(times)):
-		if times[index] is not None:
-			continue
-		position = bisect.bisect_left(known, index)
-		previous = known[position - 1] if position > 0 else None
-		following = known[position] if position < len(known) else None
-		if previous is None:
-			times[index] = times[following]
-		elif following is None:
-			times[index] = times[previous]
-		else:
-			ratio = (index - previous) / (following - previous)
-			times[index] = times[previous] + ratio * (times[following] - times[previous])
-	wordTimes = []
-	cursor = 0
-	for row in rows:
-		wordTimes.append(times[cursor:cursor + len(row["words"])])
-		cursor += len(row["words"])
-	return wordTimes
+	return splitByRow(rows, fillGaps(starts)), splitByRow(rows, fillGaps(ends))
 
 
 def tokenizeFormula(formula):
@@ -170,6 +195,76 @@ def buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn):
 	return cards
 
 
+def buildAvatar(takeDir):
+	manifestPath = AVATAR_DIR / "manifest.json"
+	if not manifestPath.exists():
+		logger.warning("No avatar manifest at %s (run tools/normalize_avatar.py): rendering without avatar", manifestPath)
+		return None
+	manifest = json.loads(manifestPath.read_text(encoding="utf-8"))
+	if AVATAR_DEFAULT_POSE not in manifest["poses"]:
+		raise ValueError(f"avatar pose '{AVATAR_DEFAULT_POSE}' missing from {manifestPath}")
+	# Remotion serves static files from the take directory (--public-dir), so the poses are copied there
+	targetDir = takeDir / "avatar"
+	targetDir.mkdir(exist_ok=True)
+	poses = {}
+	for poseId, pose in manifest["poses"].items():
+		shutil.copyfile(AVATAR_DIR / pose["src"], targetDir / pose["src"])
+		poses[poseId] = f"avatar/{pose['src']}"
+	return {
+		"poses": poses,
+		"imageWidth": manifest["width"],
+		"imageHeight": manifest["height"],
+		"height": AVATAR_HEIGHT,
+		"left": AVATAR_LEFT,
+		"defaultPose": AVATAR_DEFAULT_POSE,
+		"cues": [],
+	}
+
+
+def buildPoseCues(rows, wordStarts, wordEnds, leadIn, availablePoses):
+	unknown = [f"line {row['lineNumber']}: {pose}" for row in rows for _, pose in row["poses"] if pose not in availablePoses]
+	if unknown:
+		raise ValueError(f"unknown avatar poses ({', '.join(unknown)}); available: {', '.join(sorted(availablePoses))}")
+	globalStarts = [start for rowStarts in wordStarts for start in rowStarts]
+	rowFirstIndex = []
+	cursor = 0
+	for row in rows:
+		rowFirstIndex.append(cursor)
+		cursor += len(row["words"])
+	intervals = []
+	for rowIndex, row in enumerate(rows):
+		for markerOffset, pose in row["poses"]:
+			wordIndices = [index for index, (offset, _) in enumerate(row["words"]) if offset >= markerOffset]
+			if not wordIndices:
+				logger.warning("Line %d: pose '%s' is not followed by any word, skipped", row["lineNumber"], pose)
+				continue
+			sentenceEnd = SENTENCE_END_PATTERN.search(row["clean"], markerOffset)
+			endOffset = sentenceEnd.start() if sentenceEnd else len(row["clean"])
+			lastWord = max([index for index in wordIndices if row["words"][index][0] < endOffset] or [wordIndices[0]])
+			start = wordStarts[rowIndex][wordIndices[0]]
+			end = wordEnds[rowIndex][lastWord] + POSE_HOLD_SECONDS
+			nextGlobal = rowFirstIndex[rowIndex] + lastWord + 1
+			if nextGlobal < len(globalStarts):
+				end = min(end, globalStarts[nextGlobal])
+			intervals.append({"pose": pose, "start": start + leadIn, "end": max(start, end) + leadIn})
+	intervals.sort(key=lambda interval: interval["start"])
+	# A pose lasts until the end of its sentence, unless the next pose starts earlier; then back to the default pose.
+	# The same pose repeated on the next sentence is held through the pause instead of flickering and bouncing again.
+	cues = []
+	for index, interval in enumerate(intervals):
+		if not cues or cues[-1]["pose"] != interval["pose"]:
+			cues.append({"pose": interval["pose"], "start": round(interval["start"], 3)})
+		following = intervals[index + 1] if index + 1 < len(intervals) else None
+		if following is not None and following["pose"] == interval["pose"] and following["start"] - interval["end"] < POSE_MERGE_GAP_SECONDS:
+			continue
+		# A return to the default pose shorter than NEUTRAL_MIN_SECONDS would only flicker: the pose is held instead
+		if (following is None or following["start"] - interval["end"] >= NEUTRAL_MIN_SECONDS) and cues[-1]["pose"] != AVATAR_DEFAULT_POSE:
+			cues.append({"pose": AVATAR_DEFAULT_POSE, "start": round(interval["end"], 3)})
+	for cue in cues:
+		logger.info("Pose %s at %.2f s", cue["pose"], cue["start"])
+	return cues
+
+
 def buildComposition(takeDir):
 	videoDir = takeDir.parent.parent
 	log = json.loads((takeDir / "log.json").read_text(encoding="utf-8"))
@@ -179,7 +274,7 @@ def buildComposition(takeDir):
 		raise RuntimeError("markers.json has no word timings: regenerate the voice")
 	leadIn = log["leadIn"]
 	rows = readScriptWords(videoDir / "script.md")
-	wordTimes = alignWordTimes(rows, voice["words"])
+	wordTimes, wordEnds = alignWordTimes(rows, voice["words"])
 	logByIndex = {entry["index"]: entry for entry in log["events"]}
 	highlights = [
 		{"start": round(entry["plannedTime"] + leadIn, 3), "end": round(entry["plannedEnd"] + leadIn, 3), "rects": entry["rects"]}
@@ -187,7 +282,7 @@ def buildComposition(takeDir):
 	]
 	area = log["captureArea"]
 	shutil.copyfile(log["audio"], takeDir / "audio.wav")
-	return {
+	composition = {
 		"fps": FPS,
 		"width": OUTPUT_WIDTH,
 		"height": OUTPUT_HEIGHT,
@@ -197,6 +292,13 @@ def buildComposition(takeDir):
 		"highlights": highlights,
 		"typingCards": buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn),
 	}
+	avatar = buildAvatar(takeDir)
+	if avatar is not None:
+		avatar["cues"] = buildPoseCues(rows, wordTimes, wordEnds, leadIn, avatar["poses"])
+		composition["avatar"] = avatar
+	elif any(row["poses"] for row in rows):
+		logger.warning("The script has pose markers but no avatar is available: poses ignored")
+	return composition
 
 
 def render(takeDir, outputPath, concurrency):
