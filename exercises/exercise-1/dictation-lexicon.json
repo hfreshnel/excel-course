@@ -1,0 +1,8 @@
+{
+	"Prix_HT": ["prix hors taxes", "prix HT"],
+	"Prix_HT_C": ["prix hors taxes de contrôle", "prix HT de contrôle"],
+	"Solde": ["taux de solde", "solde"],
+	"Evo": ["évolution"],
+	"CA_TTC": ["chiffre d'affaires TTC", "chiffre d'affaires"],
+	"PCA": ["pourcentage du chiffre d'affaires", "part du chiffre d'affaires"]
+}

@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 from video_script import MARKER_PATTERN, POSE_ID_PATTERN, POSE_MARKER_PATTERN, SPOKEN_COLUMN_INDEX, readRows, stripMarkers
@@ -28,10 +29,29 @@ OUTPUT_WIDTH = 1920
 OUTPUT_HEIGHT = 1080
 CARD_LEAD_SECONDS = 0.35
 CARD_HOLD_SECONDS = 0.9
-DICTATION_START_PATTERN = re.compile(r"saisissez\s*:?\s*", re.IGNORECASE)
+DICTATION_START_PATTERN = re.compile(r"\b(?:saisissez|tapez)\b\s*:?\s*", re.IGNORECASE)
 DICTATION_END_PATTERN = re.compile(r",\s*puis\b|\.(?=\s|$)")
+DICTATION_LEXICON_NAME = "dictation-lexicon.json"
+# Generic spoken forms of formula symbols; range and function names come from the exercise lexicon
+SYMBOL_EXPRESSIONS = {
+	"=": ["égal"],
+	"*": ["multiplié par", "multipliée par", "multipliés par", "multipliées par", "fois"],
+	"/": ["divisé par", "divisée par", "divisés par", "divisées par", "sur"],
+	"+": ["plus"],
+	"-": ["moins"],
+	"^": ["puissance"],
+	"&": ["et commercial"],
+	"(": ["entre parenthèses", "ouvrez la parenthèse", "ouvrez une parenthèse", "parenthèse ouvrante"],
+	")": ["le tout", "fermez la parenthèse", "parenthèse fermante"],
+	";": ["point-virgule", "point virgule"],
+	":": ["deux-points", "deux points"],
+}
+NUMBER_EXPRESSIONS = {"0": ["zéro"], "1": ["un", "une"], "2": ["deux"], "3": ["trois"], "4": ["quatre"], "5": ["cinq"], "10": ["dix"], "100": ["cent"]}
+# Symbols may stay unspoken ("le tout divisé par" implies the closing parenthesis); names and values must be dictated
+REQUIRED_TOKEN_KINDS = {"name", "number", "string"}
 WORD_PATTERN = re.compile(r"\S+")
 NORMALIZE_PATTERN = re.compile(r"[^\w]+")
+DICTATION_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
 FORMULA_TOKEN_PATTERN = re.compile(r"""
 	(?P<string>"[^"]*")
 	|(?P<number>\d+(?:,\d+)?%?)
@@ -136,7 +156,42 @@ def findMarkerRow(rows, markerName):
 	raise KeyError(f"marker '{markerName}' not found in the script")
 
 
-def dictationSegments(row, event):
+def dictationKey(word):
+	# Accent- and case-insensitive: "soldé" matches the range name Prix_Solde, "aujourd'hui" the function AUJOURDHUI
+	decomposed = unicodedata.normalize("NFD", word.lower())
+	return DICTATION_KEY_PATTERN.sub("", "".join(char for char in decomposed if not unicodedata.combining(char)))
+
+
+def loadDictationLexicon(exerciseDir):
+	path = exerciseDir / DICTATION_LEXICON_NAME
+	if not path.exists():
+		logger.warning("No dictation lexicon at %s: names are matched by their own spelling only", path)
+		return {}
+	lexicon = json.loads(path.read_text(encoding="utf-8"))
+	if not isinstance(lexicon, dict) or not all(isinstance(forms, list) for forms in lexicon.values()):
+		raise ValueError(f"{path}: expected an object mapping each name to a list of spoken forms")
+	return lexicon
+
+
+def tokenExpressions(token, lexicon):
+	text = token["text"]
+	if token["kind"] == "name":
+		forms = lexicon.get(text, []) + [text.replace("_", " ")]
+	elif token["kind"] == "number":
+		forms = [text] + NUMBER_EXPRESSIONS.get(text, [])
+	elif token["kind"] == "string":
+		forms = [text.strip('"')]
+	else:
+		forms = SYMBOL_EXPRESSIONS.get(text, [])
+	expressions = []
+	for form in forms:
+		keys = tuple(key for key in (dictationKey(word) for word in form.split()) if key)
+		if keys and keys not in expressions:
+			expressions.append(keys)
+	return expressions
+
+
+def dictationWords(row, event):
 	clean = row["clean"]
 	if "dictationFrom" in event:
 		start = row["markers"][event["dictationFrom"]]
@@ -148,13 +203,65 @@ def dictationSegments(row, event):
 		start = matches[-1].end()
 	endMatch = DICTATION_END_PATTERN.search(clean, start)
 	end = endMatch.start() if endMatch else len(clean)
+	words = []
+	for match in WORD_PATTERN.finditer(clean, start, end):
+		key = dictationKey(match.group())
+		if key:
+			words.append({"offset": match.start(), "text": match.group(), "key": key})
+	return words
+
+
+def alignDictation(tokens, words, lexicon):
+	# Monotonic alignment maximizing the number of tokens found in the spoken words; words between
+	# tokens ("le", "du", ...) are skipped. On ties the earliest match wins.
+	options = [tokenExpressions(token, lexicon) for token in tokens]
+	keys = [word["key"] for word in words]
+	tokenCount, wordCount = len(tokens), len(keys)
+	best = [[0] * (wordCount + 1) for _ in range(tokenCount + 1)]
+	choice = [[None] * (wordCount + 1) for _ in range(tokenCount + 1)]
+	for tokenIndex in range(tokenCount - 1, -1, -1):
+		for wordIndex in range(wordCount, -1, -1):
+			score, pick = best[tokenIndex + 1][wordIndex], None
+			for expression in options[tokenIndex]:
+				end = wordIndex + len(expression)
+				if end <= wordCount and tuple(keys[wordIndex:end]) == expression and 1 + best[tokenIndex + 1][end] > score:
+					score, pick = 1 + best[tokenIndex + 1][end], end
+			if wordIndex < wordCount and best[tokenIndex][wordIndex + 1] > score:
+				score, pick = best[tokenIndex][wordIndex + 1], "skipWord"
+			best[tokenIndex][wordIndex], choice[tokenIndex][wordIndex] = score, pick
+	spans = [None] * tokenCount
+	tokenIndex = wordIndex = 0
+	while tokenIndex < tokenCount:
+		pick = choice[tokenIndex][wordIndex]
+		if pick == "skipWord":
+			wordIndex += 1
+			continue
+		if pick is not None:
+			spans[tokenIndex] = (wordIndex, pick)
+			wordIndex = pick
+		tokenIndex += 1
+	return spans
+
+
+def dictationSegments(row, event, tokens, lexicon):
+	words = dictationWords(row, event)
+	spans = alignDictation(tokens, words, lexicon)
+	missing = [token["text"] for token, span in zip(tokens, spans) if span is None and token["kind"] in REQUIRED_TOKEN_KINDS]
+	if missing:
+		spoken = " ".join(word["text"] for word in words)
+		raise ValueError(f"line {row['lineNumber']}: {missing} not found in the dictation \"{spoken}\" (add spoken forms to {DICTATION_LEXICON_NAME})")
+	matched = [index for index, span in enumerate(spans) if span is not None]
+	if not matched:
+		raise ValueError(f"line {row['lineNumber']}: no token of {[token['text'] for token in tokens]} found in the dictation")
 	segments = []
-	cursor = start
-	for part in clean[start:end].split(","):
-		leading = len(part) - len(part.lstrip())
-		if part.strip():
-			segments.append({"text": part.strip(), "offset": cursor + leading})
-		cursor += len(part) + 1
+	for index, span in enumerate(spans):
+		if span is None:
+			# An unspoken symbol appears with the next dictated token, or with the previous one at the end
+			following = [candidate for candidate in matched if candidate > index]
+			anchor = spans[following[0] if following else matched[-1]]
+			segments.append({"text": "", "offset": words[anchor[0]]["offset"]})
+		else:
+			segments.append({"text": " ".join(word["text"] for word in words[span[0]:span[1]]), "offset": words[span[0]]["offset"]})
 	return segments
 
 
@@ -165,7 +272,7 @@ def segmentTime(row, rowTimes, offset):
 	return rowTimes[-1]
 
 
-def buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn):
+def buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn, lexicon):
 	cards = []
 	for index, event in enumerate(timeline["events"]):
 		if event["type"] not in TYPED_EVENT_TYPES:
@@ -176,9 +283,10 @@ def buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn):
 			continue
 		tokens = tokenizeFormula(event["formula"])
 		rowIndex = findMarkerRow(rows, event["at"])
-		segments = dictationSegments(rows[rowIndex], event)
-		if len(segments) != len(tokens):
-			raise ValueError(f"event {index} ({event['target']}): {len(tokens)} formula tokens {[t['text'] for t in tokens]} but {len(segments)} dictated segments {[s['text'] for s in segments]}")
+		try:
+			segments = dictationSegments(rows[rowIndex], event, tokens, lexicon)
+		except ValueError as error:
+			raise ValueError(f"event {index} ({event['target']}, {event['formula']}): {error}") from error
 		for token, segment in zip(tokens, segments):
 			token["time"] = round(segmentTime(rows[rowIndex], wordTimes[rowIndex], segment["offset"]) + leadIn, 3)
 			token["spoken"] = segment["text"]
@@ -290,7 +398,7 @@ def buildComposition(takeDir):
 		"capture": {"src": log["capture"], "width": area["w"], "height": area["h"], "offsetY": (OUTPUT_HEIGHT - area["h"]) // 2},
 		"audio": {"src": "audio.wav", "delay": leadIn},
 		"highlights": highlights,
-		"typingCards": buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn),
+		"typingCards": buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn, loadDictationLexicon(videoDir.parent)),
 	}
 	avatar = buildAvatar(takeDir)
 	if avatar is not None:

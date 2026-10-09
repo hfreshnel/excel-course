@@ -25,7 +25,7 @@ Chaque script utilise le format :
 
 `TC | À l'écran | Texte prononcé | Action Excel`
 
-- **Texte prononcé** : seule colonne envoyée au générateur de voix. Les nombres et symboles y sont écrits comme ils doivent être dits (« cinq virgule cinq pour cent », « Prix tiret bas H T »).
+- **Texte prononcé** : seule colonne envoyée au générateur de voix. Les nombres y sont écrits comme ils doivent être dits (« cinq virgule cinq pour cent »). Formules et noms se lisent comme un humain les dit, sans rien épeler : « saisissez égal, prix hors taxes multiplié par le taux de solde ». La syntaxe exacte s'affiche dans la carte de saisie. Pour que le rendu retrouve chaque jeton, la dictée suit « saisissez » et s'arrête à la fin de phrase ou à « , puis ». Les noms qui ne se disent pas comme ils s'écrivent sont déclarés dans `dictation-lexicon.json`.
 - **À l'écran** : ce que le montage affiche ou met en surbrillance (bandeaux, encadrés, plages citées).
 - **Action Excel** : ce que l'automatisation exécute. Les formules y sont écrites **en version française d'Excel**, telles que l'élève les tape. L'automatisation devra les écrire avec `Range.Formula2Local`, ou les traduire en anglais pour `Range.Formula2`. Une formule n'est saisie que dans sa première cellule : la propagation remplit le reste.
 - **TC** : estimation calculée par `tools/estimate_timecodes.py` à partir du nombre de mots prononcés (140 mots/min). Le timing réel viendra des timestamps de l'audio.
