@@ -5,7 +5,7 @@ Version production avec **texte prononcé + indications écran + actions Excel**
 ## Structure
 
 - **Vidéo 0** : présentation de l'énoncé et feuille de route. Elle ne compte pas dans les étapes.
-- **Vidéos 1 à 9** : les neuf étapes de la résolution. Chacune s'ouvre sur le bandeau « Étape X sur 9 — titre » et sur une phrase de rappel prononcée (« Étape X sur neuf : … »).
+- **Vidéos 1 à 9** : les neuf étapes de la résolution. Chacune s'ouvre sur le bandeau « Étape X sur 9 — titre » et sur une phrase de rappel prononcée qui situe l'étape (« troisième étape sur neuf », « Neuvième et dernière étape »…), formulée différemment à chaque vidéo et rattachée à la précédente.
 
 | Étape | Vidéo | Consigne de l'énoncé |
 |---|---|---|

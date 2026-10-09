@@ -19,7 +19,8 @@ Ne pas les remettre en cause sans validation explicite de Wilfried.
 - Formules enseignées en **propagation dynamique M365** (formules matricielles dynamiques). **Jamais** de matrices héritées `{=…}`.
 - Les **erreurs de l'énoncé client sont corrigées et expliquées en vidéo**.
 - Plusieurs vidéos par exercice. **Exercice 1 : 9 vidéos** + une vidéo 0.
-- Structure de chaque exercice : **vidéo 0** (présentation de la consigne et feuille de route de la résolution), puis un **rappel d'une phrase en tête de chaque vidéo suivante** (« étape X sur N »).
+- Structure de chaque exercice : **vidéo 0** (présentation de la consigne et feuille de route de la résolution), puis un **rappel d'une phrase en tête de chaque vidéo suivante** (« étape X sur N »). Depuis le 2026-10-09, la tournure de ce rappel varie d'une vidéo à l'autre (l'information « étape X sur N » reste dans la première phrase).
+- **Transitions (décision du 2026-10-09)** : chaque paragraphe découle du précédent (conséquence, question soulevée) plutôt que d'être annoncé (« Passons à », « Voyons »…). Pas de formules toutes faites ni de tournures répétées d'une vidéo à l'autre. Chaque fin de vidéo pose la question que la suivante résout, avec un **poids proportionné à l'importance de la vidéo suivante** (courte avant les vidéos 2, 8 ; développée avant 1, 3, 5, 6, 9). Pas de fil rouge narratif inventé : les liens viennent des données et des calculs.
 - **Exercice 2 : pas encore reçu.** Ne rien supposer à son sujet.
 
 **Format des scripts vidéo**
@@ -68,7 +69,7 @@ script (texte + indications écran)
 - Formules saisies de façon **instantanée** (`Range.Formula2Local` d'un coup), pas de frappe simulée.
 - Ancrage des actions par **marqueurs dans le texte prononcé** : `{@nom}` déclenche l'action au début du mot qui suit. Chaque ligne du tableau porte aussi un marqueur implicite `r1`, `r2`… Les marqueurs ne sont jamais prononcés (`tools/video_script.py` les retire).
 - **Poses de l'avatar dans le texte prononcé (décision du 2026-10-08)** : `{pose:id}` change de pose au début du mot qui suit ; la pose dure **jusqu'à la fin de la phrase** (`.`, `!`, `?`, `…`, ou fin de ligne), puis retour à `neutral`. Pour la prolonger, la répéter sur la phrase suivante. Ajustements automatiques : pose maintenue 0,3 s après le dernier mot (sans chevaucher le mot suivant), même pose répétée à moins de 1,5 s fusionnée, retour à `neutral` de moins de 1 s supprimé. Un id inconnu ou mal formé arrête le rendu avec une erreur explicite ; `stripMarkers` retire tout `{pose:…}`, même mal formé.
-- Les scripts de l'exercice 1 sont **figés** (texte prononcé). Seuls des marqueurs y sont ajoutés.
+- Les scripts de l'exercice 1 étaient **figés** (texte prononcé, seuls des marqueurs ajoutés). **Exception validée le 2026-10-09** : réécriture des transitions. Toute autre modification du texte prononcé reste à valider par Wilfried. Contraintes de toute réécriture : ne pas modifier les phrases de dictée de formule (« saisissez : égal, … »), garder tous les marqueurs `{@…}` et `{pose:…}` devant les mêmes mots, garder le nombre et l'ordre des lignes (marqueurs implicites `r1`, `r2`… utilisés par les timelines), puis recalculer les TC et régénérer le prompteur.
 - **Zoom Excel des prises : 90 %** (colonnes A à P visibles en 1920×1020).
 - **Saisies en incrustation** (rendu en post, Excel reste en saisie instantanée) :
   - périmètre : **formules** et **noms de plages** (zone Nom). Pas les valeurs ponctuelles ni la saisie de données en masse ;
@@ -190,7 +191,7 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 - **Format d'export de l'avatar** (fond uni, vert, canal alpha ?) : conditionne l'incrustation. À vérifier en premier.
 - **Avatar chibi en poses clés** (voir section 2). Restent ouverts : liste des poses et expressions (proposition du 2026-10-08 à valider), déclenchement des poses depuis les scripts, cohérence du personnage d'une image générée à l'autre. **En bas à gauche, l'avatar masque les onglets de feuilles**, utilisés à l'écran dans les vidéos 1 (création et couleur de D1) et 6 à 9 (feuilles graphiques) : prévoir un déplacement ou une réduction à ces moments.
 - **Relation entre `02-solution.xlsx` et `02-sol.xlsx`** non clarifiée.
-- **Scripts de l'exercice 1** : réécrits (environ 32 min de texte parlé au total), à relire par Wilfried et le collègue. Restent à vérifier dans un vrai Excel : affichage de 100,23 € pour le Prix TTC de janvier, comportement des années (colonne numérique) lors de la création des graphiques en barres et combiné. À confirmer côté client : les élèves reçoivent-ils l'image de fond `03-wall.jpg` ?
+- **Scripts de l'exercice 1** : réécrits (environ 35 min de texte parlé au total depuis l'ajout des transitions du 2026-10-09, contre 32 avant), à relire par Wilfried et le collègue. Restent à vérifier dans un vrai Excel : affichage de 100,23 € pour le Prix TTC de janvier, comportement des années (colonne numérique) lors de la création des graphiques en barres et combiné. À confirmer côté client : les élèves reçoivent-ils l'image de fond `03-wall.jpg` ?
 - **Barre de juillet en orange** dans l'histogramme de l'énoncé : raison inconnue, non reprise dans les scripts.
 - **Titres de graphiques en anglais** dans l'énoncé (« Sales », « Evolution », « Years », « Prices ») : conservés, sauf « Périodes » → « Années » (vidéo 8).
 - **Exercice 2** pas encore reçu.
