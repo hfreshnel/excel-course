@@ -135,9 +135,9 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 
 ### Gestion des fichiers binaires
 
-- **Git LFS** suit `*.xlsx`, `*.xlsm`, `*.jpg`, `*.jpeg`, `*.png`, `*.mp4`, `*.mov`, `*.webm`, `*.wav`, `*.mp3` (voir `.gitattributes`). Tout nouveau type binaire doit y être ajouté **avant** son premier commit.
+- **Git LFS** suit `*.xlsx`, `*.xlsm`, `*.jpg`, `*.jpeg`, `*.png` (voir `.gitattributes`). Tout nouveau type binaire versionné doit y être ajouté **avant** son premier commit.
 - Les enregistrements, rendus et états régénérables (`recordings/`, `renders/`, `states/`) ne sont pas versionnés (voir `.gitignore`).
-- **Décision du 2026-10-09 : aucune vidéo ni aucun audio sur le git** (trop volumineux, régénérables). Les dossiers restent en place sur le disque. Constat à cette date : aucun média suivi, tous dans `video-XX/recordings/` et `video-XX/renders/`, déjà ignorés.
+- **Décision du 2026-10-09 : aucune vidéo ni aucun audio sur le git** (trop volumineux, régénérables). Les dossiers restent en place sur le disque. Constat à cette date : aucun média suivi, tous dans `video-XX/recordings/` et `video-XX/renders/`, déjà ignorés. Filet de sécurité : `.gitignore` exclut les extensions audio et vidéo **partout** dans le repo (`mp4`, `mov`, `webm`, `mkv`, `avi`, `wav`, `mp3`, `m4a`, `aac`, `flac`, `ogg`, `opus`), et ces types ne sont plus suivis par LFS.
 
 ## 6. Règles techniques Excel (COM)
 

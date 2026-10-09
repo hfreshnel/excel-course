@@ -22,6 +22,20 @@ out/
 assets/avatar/normalized/
 *.mp4.part
 
+# Audio and video are never versioned anywhere (too large, regenerable; voice takes are backed up outside git)
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.avi
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac
+*.ogg
+*.opus
+
 # OS / IDE
 Thumbs.db
 desktop.ini
