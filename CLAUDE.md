@@ -21,7 +21,7 @@ Ne pas les remettre en cause sans validation explicite de Wilfried.
 - Plusieurs vidéos par exercice. **Exercice 1 : 9 vidéos** + une vidéo 0.
 - Structure de chaque exercice : **vidéo 0** (présentation de la consigne et feuille de route de la résolution), puis un **rappel d'une phrase en tête de chaque vidéo suivante** (« étape X sur N »). Depuis le 2026-10-09, la tournure de ce rappel varie d'une vidéo à l'autre (l'information « étape X sur N » reste dans la première phrase).
 - **Transitions (décision du 2026-10-09)** : chaque paragraphe découle du précédent (conséquence, question soulevée) plutôt que d'être annoncé (« Passons à », « Voyons »…). Pas de formules toutes faites ni de tournures répétées d'une vidéo à l'autre. Chaque fin de vidéo pose la question que la suivante résout, avec un **poids proportionné à l'importance de la vidéo suivante** (courte avant les vidéos 2, 8 ; développée avant 1, 3, 5, 6, 9). Pas de fil rouge narratif inventé : les liens viennent des données et des calculs.
-- **Exercice 2 : pas encore reçu.** Ne rien supposer à son sujet.
+- **Exercice 2 : données brutes reçues le 2026-10-10** (voir section 5). Découpage en vidéos, choix de résolution et scripts : rien n'est décidé, ne rien supposer.
 
 **Format des scripts vidéo**
 - Uniquement le **texte parlé** + les **indications de ce qui s'affiche à l'écran**.
@@ -114,7 +114,10 @@ script (texte + indications écran)
 │   │   ├── solution/  # 02-solution.xlsx, 02-sol.xlsx
 │   │   ├── states/    # classeurs de fin d'étape générés (non versionnés)
 │   │   └── video-00 … video-09/   # script.md (+ timeline.json pour video-03) ; recordings/, renders/ non versionnés
-│   └── exercise-2/    # vide tant que non reçu
+│   └── exercise-2/
+│       ├── data/      # 01-data.xlsx, CSV 02 et 04 à 08 ; old/01-data.xlsx (version 2024)
+│       ├── solution/  # 02-sol.xlsx ; old/02-sol.xlsx (version 2024)
+│       └── colleague/ # pack du collègue (2026-10-10) : premier jet des scripts, rapport de contrôle, classeur de démo
 ├── requirements.txt   # dépendances Python (venv .venv à la racine)
 ├── automation/        # Python : pilotage Excel, capture, journal, aperçu de contrôle
 ├── compositing/       # Remotion 4.0.533 + @remotion/media (TypeScript, React 19) : ExcelLesson, HighlightBox, FocusBlur, TypingCard, ProfessorEx ; composition AvatarPreview
@@ -131,6 +134,12 @@ script (texte + indications écran)
 | `assets/client/03-wall.jpg` | Original du client, conservé intact. **Fond des graphiques** (pas un décor de studio) |
 | `assets/charts-background.jpg` | Copie de travail renommée de `03-wall.jpg` (contenu identique). C'est elle que le code référence |
 | `exercises/exercise-1/README.md` | **Référence des scripts** : structure en 9 étapes, convention des colonnes, choix de résolution (feuilles, noms, formules), erreurs de l'énoncé corrigées, valeurs de contrôle. À tenir à jour avec les scripts |
+| `exercises/exercise-2/data/01-data.xlsx` | Énoncé de l'exercice 2 (2025-12-03). Feuille `QS` : **25 questions** (NB, NB.SI(.ENS), SOMME.SI(.ENS), MOYENNE.SI(.ENS), MAX/MIN.SI.ENS, RECHERCHEV, ESTVIDE, ABS, graphique dynamique, sous-totaux, TCD et graphique croisé dynamique, fichier CSV, tableaux avancés, références de cellules, SI imbriqués, ET/OU/NON, TRANSPOSE, RECHERCHEH/X, INDEX/EQUIV). Feuilles `Q1`, `S2`, `S3`, `S5`, `SOL`, `CC` (feuille graphique), un TCD, `03-wall.jpg` intégrée. **La feuille `SOL` contient déjà des formules de solution** (120). Fautes dans la consigne (« peronnes », « Valeure ») |
+| `exercises/exercise-2/data/02-data.csv` | 210 établissements d'enseignement américains (2023) (`schoolid`, `schoolname`, `CalendarYear`…). Probablement la question 19 (« Gestion d'un fichier CSV »), à confirmer |
+| `exercises/exercise-2/data/04-data.csv` à `08-data.csv` | Livrés dans un sous-dossier `00-data/`. 04 : classement mondial des universités (2 200 lignes, 2012 à 2015) ; 05 : statuts d'emploi ; 06 : codes et symboles de devises (UTF-8) ; 07 : niveaux d'études ; 08 : secteurs d'activité. Usage non précisé par le client (listes de validation ? tableaux avancés ?) |
+| `exercises/exercise-2/solution/02-sol.xlsx` | Solution (2025-12-03). Feuilles `QS`, `S1`, `S2`, `S3`, `S5`, `SOL`, `CC` ; 35 noms définis, mêlant anglais et français (`Salaries` sur `SOL`, `Salaires` sur `S1`…) ; **`Dates` pointe sur `#REF!`** |
+| `exercises/exercise-2/data/old/01-data.xlsx`, `solution/old/02-sol.xlsx` | Versions d'août 2024 livrées dans `00-data/old/`. L'ancien énoncé a d'autres feuilles (`Q1` à `Q5`, `ALL`) et 3 images PNG (absentes de la nouvelle version) ; l'ancienne solution a une feuille `S4` et `Jobs` sur `#REF!` |
+| `exercises/exercise-2/colleague/` | Pack du collègue (2026-10-10), qui écrit les scripts de l'exercice 2 : scripts de 11 vidéos (0 à 10) en un seul fichier, rapport de contrôle, classeur `Exercice2_demo_Q1_pret_a_filmer.xlsx`. **Premier jet, pas des scripts de production.** Valeurs de contrôle des questions 1 à 9 justes (Q5 = 6 066, Q7 = 2 897 : la solution du client oublie la condition sur le salaire). Classeur de démo inutilisable (`#NOM?` en `L30:L31` : openpyxl sans préfixe `_xlfn.` ; colonnes calculées vides). Retour préparé pour lui le 2026-10-10 : Q10-11 = liste déroulante (validation `SOL!E22`, source `Clients`) + RECHERCHEV, pas UNIQUE ; Q13 = ABS sur une plage ; Q14-15 = liste déroulante des métiers (`SOL!A56`, `Jobs`) qui pilote le graphique ; bug client en `SOL!C56` (recherche par le salaire 2000, Doctor et Accountant à 9 733 tous les deux) ; conventions de script non respectées (formules préremplies, lecture épelée, pointage, transitions annoncées) |
 | `exercises/exercise-1/video-00 … 09/script.md` | Scripts de production. Version du collègue (2026-10-06) **réécrite le 2026-10-06** selon les recommandations validées par Wilfried. Tableau `TC \| À l'écran \| Texte prononcé \| Action Excel`. Seule la colonne « Texte prononcé » va à la génération audio. Les TC sont estimés par `tools/estimate_timecodes.py`, le timing réel viendra de Whisper |
 
 Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire avec esprit critique.
@@ -138,6 +147,8 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 ### Gestion des fichiers binaires
 
 - **Git LFS** suit `*.xlsx`, `*.xlsm`, `*.jpg`, `*.jpeg`, `*.png` (voir `.gitattributes`). Tout nouveau type binaire versionné doit y être ajouté **avant** son premier commit.
+- **CSV gardés à l'identique** (`*.csv -text` dans `.gitattributes`, depuis le 2026-10-10) : les fichiers du client sont versionnés octet pour octet, sans normalisation des fins de ligne (ceux de l'exercice 2 sont en LF).
+- Les fichiers reçus du client gardent leur nom ; seul leur emplacement change (`data/`, `solution/`, `old/` pour les versions antérieures). Livraison de l'exercice 2 : dossier `02-part-02/` (chemin d'origine du client : `24-02-00-excel\01-td\02-part-02\`), son `03-wall.jpg` identique à `assets/client/03-wall.jpg` (même SHA-256) n'a pas été dupliqué.
 - Les enregistrements, rendus et états régénérables (`recordings/`, `renders/`, `states/`) ne sont pas versionnés (voir `.gitignore`).
 - **Décision du 2026-10-09 : aucune vidéo ni aucun audio sur le git** (trop volumineux, régénérables). Les dossiers restent en place sur le disque. Constat à cette date : aucun média suivi, tous dans `video-XX/recordings/` et `video-XX/renders/`, déjà ignorés. Filet de sécurité : `.gitignore` exclut les extensions audio et vidéo **partout** dans le repo (`mp4`, `mov`, `webm`, `mkv`, `avi`, `wav`, `mp3`, `m4a`, `aac`, `flac`, `ogg`, `opus`), et ces types ne sont plus suivis par LFS.
 
@@ -195,7 +206,7 @@ Les solutions du client peuvent contenir des erreurs (voir section 2). Les lire 
 - **Scripts de l'exercice 1** : réécrits (environ 35 min de texte parlé au total depuis l'ajout des transitions du 2026-10-09, contre 32 avant), à relire par Wilfried et le collègue. Restent à vérifier dans un vrai Excel : affichage de 100,23 € pour le Prix TTC de janvier, comportement des années (colonne numérique) lors de la création des graphiques en barres et combiné. À confirmer côté client : les élèves reçoivent-ils l'image de fond `03-wall.jpg` ?
 - **Barre de juillet en orange** dans l'histogramme de l'énoncé : raison inconnue, non reprise dans les scripts.
 - **Titres de graphiques en anglais** dans l'énoncé (« Sales », « Evolution », « Years », « Prices ») : conservés, sauf « Périodes » → « Années » (vidéo 8).
-- **Exercice 2** pas encore reçu.
+- **Exercice 2** (reçu le 2026-10-10) : 25 questions, soit bien plus de matière que l'exercice 1. Scripts écrits par le collègue (premier jet dans `colleague/`, réécriture demandée). À demander au client : colonne Salaries vide dans `Q1` de l'énoncé (remplie dans l'ancienne version et dans `SOL`), rôle des CSV 04 à 08. À trancher avec Wilfried : découpage en vidéos (11 proposées par le collègue), version des données de travail (l'énoncé contient déjà la feuille `SOL` remplie), noms définis à retenir (anglais ou français), Excel M365 attendu pour RECHERCHEX et la propagation dynamique.
 - **Voix** : qualité de l'enregistrement au téléphone inconnue (premier test à faire). Choix d'un modificateur de voix ouvert. **Conservation des enregistrements bruts** (décision du 2026-10-09) : hors git, **Wilfried sauvegarde lui-même ses prises** (une voix enregistrée ne se régénère pas, contrairement aux autres médias). Outil d'alignement Whisper pas encore écrit.
 - **Dérive de synchronisation** sur les longues manipulations : d'où l'enregistrement par étape.
 - **Qualité « masterclass »** : prévoir une passe de contrôle visuel sur chaque vidéo, un pipeline automatisé produit un rendu propre mais standardisé.
