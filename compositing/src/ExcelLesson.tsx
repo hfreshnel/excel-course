@@ -1,15 +1,18 @@
 // @remotion/media replaces OffthreadVideo, whose frame cache overflowed on long full-HD captures ("No frame found at position")
 import { Audio, Video } from "@remotion/media";
 import { AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { CalloutBox } from "./CalloutBox";
 import { FocusBlur } from "./FocusBlur";
 import { HighlightBox } from "./HighlightBox";
+import { MenuPathStrip } from "./MenuPathStrip";
 import { ProfessorEx } from "./ProfessorEx";
+import { StepBanner } from "./StepBanner";
 import { TypingCard } from "./TypingCard";
 import { fadeOpacity, type LessonData } from "./lesson-data";
 
 const BACKGROUND = "#1B1E24";
 
-export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, typingCards, avatar }) => {
+export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, typingCards, banners = [], callouts = [], menuPaths = [], avatar }) => {
 	const frame = useCurrentFrame();
 	const { fps } = useVideoConfig();
 	const time = frame / fps;
@@ -32,6 +35,9 @@ export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, 
 						<HighlightBox rect={activeCard.targetRect} opacity={cardOpacity} strong />
 					</>
 				) : null}
+				{callouts.map((callout, index) => <CalloutBox key={index} callout={callout} time={time} />)}
+				{menuPaths.map((path, index) => <MenuPathStrip key={index} path={path} time={time} />)}
+				{banners.map((banner, index) => <StepBanner key={index} banner={banner} time={time} />)}
 			</div>
 			{avatar ? <ProfessorEx avatar={avatar} /> : null}
 			{activeCard ? <TypingCard card={activeCard} time={time} opacity={cardOpacity} /> : null}

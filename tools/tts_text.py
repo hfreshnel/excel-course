@@ -12,6 +12,10 @@ DECIMAL_PATTERN = re.compile(r"\b(\d+),(\d+)\b")
 INTEGER_PATTERN = re.compile(r"\b\d+\b")
 UPPERCASE_WORD_PATTERN = re.compile(r"\b[A-ZÀ-Ý]{2,}\b")
 SYMBOLS = {"%": " pour cent", "€": " euros"}
+# Single letters Chatterbox misreads (heard on video 2): "D" as "deux", "H" as "a". Spelled as their French names,
+# both in cell references ("D2") and in spelled acronyms ("H T").
+LETTER_NAMES = {"D": "dé", "H": "ache"}
+SINGLE_LETTER_PATTERN = re.compile(r"(?<![\w'’])([A-Z])(?![\w'’])")
 
 
 def loadLexicon(exerciseDir):
@@ -47,6 +51,7 @@ def ttsText(text, lexicon):
 	text = GROUPED_NUMBER_PATTERN.sub(lambda match: match.group(1) + re.sub(r"\D", "", match.group(2)), text)
 	# Cell references are spelled: "E13" -> "E treize", "AB11" -> "A B onze"
 	text = CELL_PATTERN.sub(lambda match: " ".join(match.group(1)) + " " + numberWords(match.group(2)), text)
+	text = SINGLE_LETTER_PATTERN.sub(lambda match: LETTER_NAMES.get(match.group(1), match.group(1)), text)
 	text = DECIMAL_PATTERN.sub(decimalWords, text)
 	text = INTEGER_PATTERN.sub(lambda match: numberWords(match.group()), text)
 	# Remaining capitalised words are Excel function names (SOMME, MOYENNE): read as words, not spelled

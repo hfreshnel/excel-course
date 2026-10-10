@@ -3,6 +3,7 @@ import difflib
 import hashlib
 import json
 import logging
+import re
 import subprocess
 import sys
 import time
@@ -58,6 +59,20 @@ HEAD_FADE = 0.01
 ROOM_TONE_DBFS = -70.0
 CROSSFADE = 0.15
 OUTPUT_SAMPLE_RATE = 48000
+# Speaking rate: Chatterbox drifts from one sentence to the next (-60 % to +60 % around the median on videos 2 and 3),
+# so a normal sentence sounds slow after a fast one. Every sentence is brought towards one target for the whole course,
+# in syllables per second of speech (gaps between words capped, pauses excluded).
+RATE_TARGET = 5.5
+RATE_TOLERANCE = 0.06
+# Rubber Band stays transparent on speech within about +-15 %; beyond that other seeds are tried first
+MAX_TEMPO_CHANGE = 0.15
+RATE_RETRY_DEVIATION = 0.20
+MAX_GAP_IN_SPEECH = 0.25
+MIN_RATE_SPEECH_SECONDS = 0.8
+VOWEL_GROUP_PATTERN = re.compile(r"[aeiouyàâäéèêëîïôöùûüœæ]+")
+SYLLABLE_WORD_PATTERN = re.compile(r"[a-zà-ÿœæ]+(?:['’-][a-zà-ÿœæ]+)*")
+ELISION_PATTERN = re.compile(r"['’]")
+MUTE_ENDING_PATTERN = re.compile(r"(?<=[^aeiouyàâäéèêëîïôöùûüœæ])es?$")
 CACHE_DIR_NAME = "voice-tts"
 OVERRIDES_NAME = "voice.json"
 FFMPEG_TIMEOUT_SECONDS = 600
@@ -95,6 +110,65 @@ def similarity(scriptText, words):
 	# Keyed on the whole transcript: Whisper splits "41,80 €" into "41" and ",80 €"
 	spoken = wordKeys(" ".join(word["text"] for word in words))
 	return difflib.SequenceMatcher(None, wordKeys(scriptText), spoken, autojunk=False).ratio()
+
+
+def countSyllables(text):
+	# Approximation of spoken French syllables: vowel groups, mute final "e"/"es", silent "u" of "qu"/"gu", elisions
+	total = 0
+	for word in SYLLABLE_WORD_PATTERN.findall(text.lower()):
+		for part in word.split("-"):
+			pieces = ELISION_PATTERN.split(part)
+			for elided in pieces[:-1]:
+				total += max(0, len(VOWEL_GROUP_PATTERN.findall(elided.replace("qu", "k"))) - 1)
+			core = re.sub(r"gu(?=[eiéèêy])", "g", pieces[-1].replace("qu", "k"))
+			if len(core) > 2:
+				core = MUTE_ENDING_PATTERN.sub("", core)
+			if core:
+				total += max(1, len(VOWEL_GROUP_PATTERN.findall(core)))
+	return total
+
+
+def speechSeconds(words):
+	if not words:
+		return 0.0
+	voiced = sum(max(0.0, word["end"] - word["start"]) for word in words)
+	gaps = sum(min(MAX_GAP_IN_SPEECH, max(0.0, following["start"] - word["end"])) for word, following in zip(words, words[1:]))
+	return voiced + gaps
+
+
+def speakingRate(scriptText, spokenText, words):
+	seconds = speechSeconds(scriptBounds(scriptText, words))
+	if seconds < MIN_RATE_SPEECH_SECONDS:
+		return None
+	return round(countSyllables(spokenText) / seconds, 2)
+
+
+def rateDeviation(rate):
+	return 0.0 if rate is None else rate / RATE_TARGET - 1
+
+
+def tempoFor(rate):
+	if rate is None or abs(rateDeviation(rate)) <= RATE_TOLERANCE:
+		return 1.0
+	return round(min(1 + MAX_TEMPO_CHANGE, max(1 - MAX_TEMPO_CHANGE, RATE_TARGET / rate)), 3)
+
+
+def stretch(piece, sampleRate, tempo, workDir):
+	# Rubber Band keeps pitch and formants; tempo < 1 slows the sentence down
+	inputPath = workDir / "stretch-in.wav"
+	outputPath = workDir / "stretch-out.wav"
+	soundfile.write(inputPath, piece, sampleRate, subtype="FLOAT")
+	command = [findFfmpeg(), "-hide_banner", "-nostats", "-loglevel", "error", "-i", str(inputPath), "-af", f"rubberband=tempo={tempo}:pitchq=quality:formant=preserved", "-c:a", "pcm_f32le", "-y", str(outputPath)]
+	completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=FFMPEG_TIMEOUT_SECONDS)
+	if completed.returncode != 0:
+		raise RuntimeError(f"ffmpeg rubberband failed (tempo {tempo}): {completed.stderr.strip()}")
+	stretched, stretchedRate = soundfile.read(outputPath, dtype="float32")
+	if stretchedRate != sampleRate:
+		raise RuntimeError(f"rubberband changed the sample rate ({sampleRate} -> {stretchedRate})")
+	expected = len(piece) / tempo
+	if abs(len(stretched) - expected) > 0.05 * sampleRate:
+		logger.warning("Stretched length %.2f s instead of %.2f s (tempo %s)", len(stretched) / sampleRate, expected / sampleRate, tempo)
+	return stretched
 
 
 class Synthesizer:
@@ -176,15 +250,24 @@ def synthesizeSentence(sentence, spokenText, seeds, forced, synthesizer, cacheDi
 			metaPath.write_text(json.dumps(attempt, indent="\t", ensure_ascii=False) + "\n", encoding="utf-8")
 			attempt["cached"] = False
 		attempt["wav"] = wavPath
+		attempt["rate"] = speakingRate(sentence["text"], spokenText, attempt["words"])
+		rateOk = abs(rateDeviation(attempt["rate"])) <= RATE_RETRY_DEVIATION
 		attempt["terminal"] = terminalPitch(wavPath, sentence["text"], attempt["words"]) if final else None
 		terminalOk = not final or (attempt["terminal"] is not None and attempt["terminal"]["ok"])
 		attempts.append(attempt)
 		ending = f", ending peak {attempt['terminal']['peakSt']:+.1f} st rise {attempt['terminal']['riseSt']:.1f} st" if attempt["terminal"] else ""
-		logger.info("%-5s seed %-5d similarity %.2f%s%s", sentence["id"], seed, attempt["similarity"], ending, " (cached)" if attempt["cached"] else f" ({attempt['seconds']} s)")
-		if forced or (attempt["similarity"] >= MIN_SIMILARITY and terminalOk):
+		rateText = f", rate {attempt['rate']:.2f} syl/s ({rateDeviation(attempt['rate']):+.0%})" if attempt["rate"] is not None else ""
+		logger.info("%-5s seed %-5d similarity %.2f%s%s%s", sentence["id"], seed, attempt["similarity"], rateText, ending, " (cached)" if attempt["cached"] else f" ({attempt['seconds']} s)")
+		if forced or (attempt["similarity"] >= MIN_SIMILARITY and terminalOk and rateOk):
 			break
-	# For the last sentence a falling ending outranks similarity
-	best = max(attempts, key=lambda item: (not final or bool(item["terminal"] and item["terminal"]["ok"]), item["similarity"]))
+
+	# For the last sentence a falling ending outranks everything; then a take that passes the Whisper check,
+	# then the rate closest to the target (it is stretched afterwards, within limits), then similarity
+	def rank(item):
+		passes = item["similarity"] >= MIN_SIMILARITY
+		return (not final or bool(item["terminal"] and item["terminal"]["ok"]), passes, -abs(rateDeviation(item["rate"])) if passes else 0.0, item["similarity"])
+
+	best = max(attempts, key=rank)
 	best["attempts"] = len(attempts)
 	return best
 
@@ -312,10 +395,12 @@ def writeReport(reportPath, scriptPath, takes, extras, duration):
 	]
 	checks = [f"- {take['id']} ({formatTime(take['start'])}) : ressemblance {take['similarity']:.0%} après {take['attempts']} essai(s), Whisper entend « {' '.join(word['text'] for word in take['words'])} »" for take in flagged]
 	checks += [f"- {formatTime(extra['start'])} : mots hors script « {extra['text']} »" for extra in extras]
+	checks += [f"- {take['id']} ({formatTime(take['start'])}) : débit {take['rate']:.2f} syllabes/s ({rateDeviation(take['rate']):+.0%} de la cible {RATE_TARGET}), encore à {rateDeviation(take['rate'] * take['tempo']):+.0%} après étirement limité à ±{MAX_TEMPO_CHANGE:.0%}" for take in takes if take["rate"] is not None and abs(rateDeviation(take["rate"] * take["tempo"])) > RATE_TOLERANCE]
 	checks += [f"- {take['id']} (dernière phrase) : fin montante après {take['attempts']} essai(s), pic {take['terminal']['peakSt']:+.1f} demi-tons, remontée {take['terminal']['riseSt']:.1f} : écouter, changer la graine dans `{OVERRIDES_NAME}`" for take in takes if take.get("terminal") and not take["terminal"]["ok"]]
-	lines += (checks or ["Aucun."]) + ["", "## Phrases", "", "| Id | Début | Graine | Essais | Ressemblance | Texte envoyé au modèle |", "|---|---|---|---|---|---|"]
+	lines += (checks or ["Aucun."]) + ["", "## Phrases", "", "| Id | Début | Graine | Essais | Ressemblance | Débit (syl/s) | Tempo | Texte envoyé au modèle |", "|---|---|---|---|---|---|---|---|"]
 	for take in takes:
-		lines.append(f"| {take['id']} | {formatTime(take['start'])} | {take['seed']} | {take['attempts']} | {take['similarity']:.0%} | {cell(take['spokenText'])} |")
+		rate = f"{take['rate']:.2f}" if take["rate"] is not None else "—"
+		lines.append(f"| {take['id']} | {formatTime(take['start'])} | {take['seed']} | {take['attempts']} | {take['similarity']:.0%} | {rate} | {take['tempo']:.3f} | {cell(take['spokenText'])} |")
 	reportPath.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -343,7 +428,15 @@ def synthesize(scriptPath, referencePath, force):
 		piece, offset = trimSentence(audio, sampleRate, scriptBounds(sentence["text"], take["words"]), index == len(sentences) - 1)
 		following = sentences[index + 1] if index + 1 < len(sentences) else None
 		pauseAfter = TAIL_SECONDS if following is None else (ROW_PAUSE if following["row"] != sentence["row"] else SENTENCE_PAUSE)
-		words = [{"text": word["text"], "start": max(0.0, word["start"] - offset), "end": min(len(piece) / sampleRate, word["end"] - offset)} for word in take["words"] if word["end"] > offset]
+		# Babble cut off after the last script word must not reach markers.json (start past the cut, end before start)
+		pieceSeconds = len(piece) / sampleRate
+		words = [{"text": word["text"], "start": max(0.0, word["start"] - offset), "end": min(pieceSeconds, word["end"] - offset)} for word in take["words"] if word["end"] > offset and word["start"] - offset < pieceSeconds]
+		tempo = tempoFor(take["rate"])
+		if tempo != 1.0:
+			piece = stretch(piece, sampleRate, tempo, cacheDir)
+			words = [{"text": word["text"], "start": word["start"] / tempo, "end": word["end"] / tempo} for word in words]
+			logger.info("%-5s rate %.2f syl/s stretched by tempo %.3f", sentence["id"], take["rate"], tempo)
+		take["tempo"] = tempo
 		takes.append({**take, "audio": piece, "sampleRate": sampleRate, "words": words, "pauseAfter": pauseAfter})
 	sampleRate = takes[0]["sampleRate"]
 	if any(take["sampleRate"] != sampleRate for take in takes):
@@ -369,7 +462,7 @@ def synthesize(scriptPath, referencePath, force):
 		"alignment": {"scriptWords": len(scriptWords), "matchedWords": matched, "extraWords": extras},
 		"markers": placeMarkers(markers, scriptWords, starts, ends),
 		"words": spokenWords,
-		"sentences": [{"id": take["id"], "seed": take["seed"], "start": round(take["start"], 3), "similarity": take["similarity"]} for take in takes],
+		"sentences": [{"id": take["id"], "seed": take["seed"], "start": round(take["start"], 3), "similarity": take["similarity"], "rate": take["rate"], "tempo": take["tempo"]} for take in takes],
 	}
 	(outputDir / "markers.json").write_text(json.dumps(payload, indent="\t", ensure_ascii=False) + "\n", encoding="utf-8")
 	writeReport(outputDir / "voice.report.md", scriptPath, takes, extras, duration)

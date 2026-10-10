@@ -48,6 +48,36 @@ export type AvatarData = {
 	cues: AvatarCue[];
 };
 
+export type StepBanner = {
+	start: number;
+	end: number;
+	step: string;
+	title: string;
+	done: boolean;
+};
+
+export type CalloutLine = {
+	text: string;
+	detail: string;
+	kind: "text" | "formula";
+	time: number;
+};
+
+export type Callout = {
+	start: number;
+	end: number;
+	title: string;
+	position: "right" | "rightColumn" | "center";
+	lines: CalloutLine[];
+};
+
+// Option A: ribbon and dialog paths are shown, not clicked in Excel
+export type MenuPath = {
+	start: number;
+	end: number;
+	steps: { text: string; time: number }[];
+};
+
 // Times are in seconds of video time; rectangles are in capture pixels
 export type LessonData = {
 	fps: number;
@@ -58,6 +88,9 @@ export type LessonData = {
 	audio: { src: string; delay: number };
 	highlights: Highlight[];
 	typingCards: TypingCard[];
+	banners?: StepBanner[];
+	callouts?: Callout[];
+	menuPaths?: MenuPath[];
 	avatar?: AvatarData;
 };
 

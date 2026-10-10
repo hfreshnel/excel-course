@@ -64,7 +64,9 @@ FORMULA_TOKEN_PATTERN = re.compile(r"""
 	|(?P<paren>[()])
 	|(?P<separator>[;:])
 """, re.VERBOSE)
-TYPED_EVENT_TYPES = {"formula"}
+TYPED_EVENT_TYPES = {"formula", "name"}
+NAME_BOX_LABEL = "Zone Nom"
+CALLOUT_POSITIONS = {"right", "rightColumn", "center"}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("renderLesson")
@@ -279,32 +281,78 @@ def segmentTime(row, rowTimes, offset):
 def buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn, lexicon):
 	cards = []
 	for index, event in enumerate(timeline["events"]):
-		if event["type"] not in TYPED_EVENT_TYPES:
+		if event["type"] not in TYPED_EVENT_TYPES or event.get("card") is False:
 			continue
 		entry = logByIndex.get(index)
 		if entry is None or entry.get("status") != "ok":
-			logger.warning("Formula event %d has no successful log entry, skipped", index)
+			logger.warning("Typed event %d has no successful log entry, skipped", index)
 			continue
-		tokens = tokenizeFormula(event["formula"])
-		rowIndex = findMarkerRow(rows, event["at"])
+		# A range name is one token typed in the Name Box; a formula is split into Excel tokens typed in its cell
+		typedText = event["name"] if event["type"] == "name" else event["formula"]
+		tokens = tokenizeFormula(typedText)
+		rowIndex = findMarkerRow(rows, event.get("dictationFrom", event["at"]))
 		try:
 			segments = dictationSegments(rows[rowIndex], event, tokens, lexicon)
 		except ValueError as error:
-			raise ValueError(f"event {index} ({event['target']}, {event['formula']}): {error}") from error
+			raise ValueError(f"event {index} ({event['target']}, {typedText}): {error}") from error
 		for token, segment in zip(tokens, segments):
 			token["time"] = round(segmentTime(rows[rowIndex], wordTimes[rowIndex], segment["offset"]) + leadIn, 3)
 			token["spoken"] = segment["text"]
 		commitTime = entry["plannedTime"] + leadIn
+		isName = event["type"] == "name"
 		cards.append({
-			"label": event["target"],
+			"label": NAME_BOX_LABEL if isName else event["target"],
 			"tokens": tokens,
 			"start": round(tokens[0]["time"] - CARD_LEAD_SECONDS, 3),
 			"commit": round(commitTime, 3),
 			"end": round(commitTime + CARD_HOLD_SECONDS, 3),
-			"targetRect": entry["rects"][0],
+			"targetRect": entry["uiRect"] if isName else entry["rects"][0],
 		})
 		logger.info("Card %s: %s", event["target"], " ".join(f"{t['text']}@{t['time']:.2f}" for t in tokens))
 	return cards
+
+
+def overlayInterval(event, markers, leadIn, videoEnd, index):
+	def markerTime(name):
+		if name not in markers:
+			raise KeyError(f"overlay event {index} ({event['type']}): unknown marker '{name}'")
+		return markers[name] + leadIn
+	start = markerTime(event["at"]) + event.get("offset", 0.0)
+	if "to" in event:
+		end = markerTime(event["to"])
+	elif "duration" in event:
+		end = start + event["duration"]
+	else:
+		# Without "to" or "duration" the overlay stays until the end of the video
+		end = videoEnd
+	return markerTime, round(start, 3), round(min(end, videoEnd), 3)
+
+
+def buildOverlays(timeline, markers, leadIn, videoEnd):
+	banners, callouts, menuPaths = [], [], []
+	for index, event in enumerate(timeline["events"]):
+		eventType = event["type"]
+		if eventType not in {"banner", "callout", "menuPath"}:
+			continue
+		markerTime, start, end = overlayInterval(event, markers, leadIn, videoEnd, index)
+		if eventType == "banner":
+			banners.append({"start": start, "end": end, "step": event["step"], "title": event["title"], "done": bool(event.get("done", False))})
+		elif eventType == "callout":
+			position = event.get("position", "right")
+			if position not in CALLOUT_POSITIONS:
+				raise ValueError(f"overlay event {index}: callout position '{position}' not in {sorted(CALLOUT_POSITIONS)}")
+			lines = [{
+				"text": line["text"],
+				"detail": line.get("detail", ""),
+				"kind": line.get("kind", "text"),
+				"time": round(markerTime(line["at"]), 3) if "at" in line else start,
+			} for line in event["lines"]]
+			callouts.append({"start": start, "end": end, "title": event.get("title", ""), "position": position, "lines": lines})
+		else:
+			steps = [{"text": step["text"], "time": round(markerTime(step["at"]), 3) if "at" in step else start} for step in event["steps"]]
+			menuPaths.append({"start": start, "end": end, "steps": steps})
+	logger.info("%d banners, %d callouts, %d menu paths", len(banners), len(callouts), len(menuPaths))
+	return {"banners": banners, "callouts": callouts, "menuPaths": menuPaths}
 
 
 def buildAvatar(takeDir):
@@ -411,6 +459,7 @@ def buildComposition(takeDir):
 		"audio": {"src": "audio.wav", "delay": leadIn},
 		"highlights": highlights,
 		"typingCards": buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn, loadDictationLexicon(videoDir.parent)),
+		**buildOverlays(timeline, voice["markers"], leadIn, log["captureDuration"]),
 	}
 	avatar = buildAvatar(takeDir)
 	if avatar is not None:

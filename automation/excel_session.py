@@ -27,6 +27,16 @@ TEACHING_CALLOUTS_KEY = OFFICE_THEME_KEY + r"\TeachingCallouts"
 TEACHING_CALLOUT_SEEN = 2
 # One-time Excel bubbles that would cover the grid in a recording
 RECORDING_CALLOUTS = ["DynamicArrayFirstSpillCallout"]
+UIA_NAME_PROPERTY_ID = 30005
+UIA_AUTOMATION_ID_PROPERTY_ID = 30011
+UIA_CONTROL_TYPE_PROPERTY_ID = 30003
+UIA_COMBO_BOX_CONTROL_TYPE_ID = 50003
+UIA_TREE_SCOPE_DESCENDANTS = 4
+# Interface elements outside the grid, found by UI Automation (French Excel UI). Any other key is an AutomationId (e.g. "TabFormulas").
+UI_ELEMENTS = {
+	"nameBox": {UIA_NAME_PROPERTY_ID: "Zone Nom", UIA_CONTROL_TYPE_PROPERTY_ID: UIA_COMBO_BOX_CONTROL_TYPE_ID},
+	"formulaBar": {UIA_AUTOMATION_ID_PROPERTY_ID: "FormulaBar"},
+}
 
 
 def enableDpiAwareness():
@@ -210,6 +220,33 @@ class ExcelSession:
 			right = pane.PointsToScreenPixelsX(area.Left + area.Width)
 			bottom = pane.PointsToScreenPixelsY(area.Top + area.Height)
 			rects.append({"address": area.Address.replace("$", ""), "x": left - origin["x"], "y": top - origin["y"], "w": right - left, "h": bottom - top, "check": self.checkPoint(area)})
+		return rects
+
+	def uiRects(self, keys, origin):
+		# pywin32 cannot drive IUIAutomation (IUnknown-based), hence comtypes; rects are resolved once, before the capture,
+		# because a lookup in the ribbon tree is too slow to run between timed events
+		if not keys:
+			return {}
+		import comtypes.client
+		comtypes.client.GetModule("UIAutomationCore.dll")
+		from comtypes.gen.UIAutomationClient import CUIAutomation, IUIAutomation
+		automation = comtypes.client.CreateObject(CUIAutomation, interface=IUIAutomation)
+		root = automation.ElementFromHandle(self.hwnd)
+		rects = {}
+		for key in keys:
+			properties = UI_ELEMENTS.get(key, {UIA_AUTOMATION_ID_PROPERTY_ID: key})
+			conditions = [automation.CreatePropertyCondition(propertyId, value) for propertyId, value in properties.items()]
+			condition = conditions[0]
+			for extra in conditions[1:]:
+				condition = automation.CreateAndCondition(condition, extra)
+			element = root.FindFirst(UIA_TREE_SCOPE_DESCENDANTS, condition)
+			if not element:
+				raise LookupError(f"interface element '{key}' not found by UI Automation ({properties})")
+			bounds = element.CurrentBoundingRectangle
+			rects[key] = {"address": f"ui:{key}", "x": bounds.left - origin["x"], "y": bounds.top - origin["y"], "w": bounds.right - bounds.left, "h": bounds.bottom - bounds.top, "check": "ui"}
+			logger.info("Interface element %s at %s", key, rects[key])
+		# Excel rejects COM calls for a moment after serving UI Automation (RPC_E_CALL_REJECTED)
+		callWithRetry(lambda: self.app.Ready)
 		return rects
 
 	def checkPoint(self, area):

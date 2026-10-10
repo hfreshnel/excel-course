@@ -10,7 +10,9 @@ from excel_session import OFFICE_THEME_COLORFUL, ExcelSession, callWithRetry, en
 from ffmpeg_tools import findFfmpeg
 from screen_recorder import ScreenRecorder, normalizeCapture
 
-EXCEL_EVENT_TYPES = {"select", "formula", "value"}
+EXCEL_EVENT_TYPES = {"select", "formula", "value", "name"}
+# Rendered by Remotion from the voice markers only: not played in Excel, so they can change without a new take
+OVERLAY_EVENT_TYPES = {"banner", "callout", "menuPath"}
 SETTLE_SECONDS = 1.5
 SPIN_THRESHOLD_SECONDS = 0.02
 
@@ -25,6 +27,8 @@ def loadJson(path):
 def resolveSchedule(timeline, markers):
 	schedule = []
 	for index, event in enumerate(timeline["events"]):
+		if event["type"] in OVERLAY_EVENT_TYPES:
+			continue
 		if event["at"] not in markers:
 			raise KeyError(f"event {index}: unknown marker '{event['at']}'")
 		plannedTime = markers[event["at"]] + event.get("offset", 0.0)
@@ -63,6 +67,16 @@ def executeEvent(session, sheetName, event):
 		callWithRetry(lambda: setattr(sheet.Range(event["target"]), "Formula2Local", event["formula"]))
 	elif eventType == "value":
 		callWithRetry(lambda: setattr(sheet.Range(event["target"]), "Value2", event["value"]))
+	elif eventType == "name":
+		# The Name Box shows the new name by itself; reselecting a single cell right away would blank it
+		callWithRetry(lambda: setattr(resolveRange(sheet, event["target"]), "Name", event["name"]))
+
+
+def uiKeys(timeline):
+	keys = {event["ui"] for event in timeline["events"] if event.get("ui")}
+	if any(event["type"] == "name" for event in timeline["events"]):
+		keys.add("nameBox")
+	return sorted(keys)
 
 
 def run(timelinePath, markersPath, statesDir, takeDir, leadIn, tail, frameRate):
@@ -96,6 +110,8 @@ def run(timelinePath, markersPath, statesDir, takeDir, leadIn, tail, frameRate):
 		area = session.workArea()
 		log["captureArea"] = area
 		log["view"] = view
+		uiRects = session.uiRects(uiKeys(timeline), area)
+		log["uiRects"] = uiRects
 		# Let Excel finish painting before the first frame
 		time.sleep(SETTLE_SECONDS)
 		recorder = ScreenRecorder(findFfmpeg(), takeDir / "capture.raw.mp4", area, frameRate)
@@ -104,21 +120,25 @@ def run(timelinePath, markersPath, statesDir, takeDir, leadIn, tail, frameRate):
 		for item in schedule:
 			event = item["event"]
 			waitUntil(audioStart + item["plannedTime"])
-			entry = {"index": item["index"], "type": event["type"], "at": event["at"], "target": event.get("target"), "plannedTime": round(item["plannedTime"], 3)}
+			entry = {"index": item["index"], "type": event["type"], "at": event["at"], "target": event.get("target") or event.get("ui"), "plannedTime": round(item["plannedTime"], 3)}
 			if item["plannedEnd"] is not None:
 				entry["plannedEnd"] = round(item["plannedEnd"], 3)
 			try:
 				executeEvent(session, sheetName, event)
 				entry["actualTime"] = round(time.perf_counter() - audioStart, 3)
 				entry["jitter"] = round(entry["actualTime"] - entry["plannedTime"], 3)
-				if event.get("target"):
+				if event.get("ui"):
+					entry["rects"] = [uiRects[event["ui"]]]
+				elif event.get("target"):
 					entry["rects"] = session.rangeRects(sheetName, event["target"], area)
+				if event["type"] == "name":
+					entry["uiRect"] = uiRects["nameBox"]
 				entry["status"] = "ok"
 			except Exception as error:
 				entry["status"] = f"error: {error}"
 				logger.exception("Event %d (%s %s) failed", item["index"], event["type"], event.get("target"))
 			logEntries.append(entry)
-			logger.info("Event %d %s %s at %.2f s (jitter %+.3f s)", item["index"], event["type"], event.get("target"), entry.get("actualTime", -1), entry.get("jitter", 0))
+			logger.info("Event %d %s %s at %.2f s (jitter %+.3f s)", item["index"], event["type"], entry["target"], entry.get("actualTime", -1), entry.get("jitter", 0))
 		waitUntil(audioStart + voice["duration"] + tail)
 		log["captureDuration"] = round(time.perf_counter() - captureStart, 3)
 		recorder.stop()
@@ -133,7 +153,7 @@ def run(timelinePath, markersPath, statesDir, takeDir, leadIn, tail, frameRate):
 		(takeDir / "log.json").write_text(json.dumps(log, indent="\t", ensure_ascii=False) + "\n", encoding="utf-8")
 		logger.info("Log written to %s", takeDir / "log.json")
 	failures = [entry for entry in logEntries if entry.get("status") != "ok"]
-	mismatches = [rect for entry in logEntries for rect in entry.get("rects", []) if rect["check"] != "ok"]
+	mismatches = [rect for entry in logEntries for rect in entry.get("rects", []) if rect["check"] not in ("ok", "ui")]
 	logger.info("%d events, %d failures, %d pixel check mismatches", len(logEntries), len(failures), len(mismatches))
 	return not failures
 
