@@ -20,6 +20,8 @@ out/
 **/renders/
 **/states/
 assets/avatar/normalized/
+assets/voice/
+*.whisper-*.json
 *.mp4.part
 
 # Audio and video are never versioned anywhere (too large, regenerable; voice takes are backed up outside git)
@@ -35,6 +37,7 @@ assets/avatar/normalized/
 *.flac
 *.ogg
 *.opus
+*.weba
 
 # OS / IDE
 Thumbs.db

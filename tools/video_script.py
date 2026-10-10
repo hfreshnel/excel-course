@@ -11,6 +11,7 @@ POSE_MARKER_PATTERN = re.compile(r"\{pose:([^}]*)\}")
 POSE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 ROW_MARKER_PATTERN = re.compile(r"^r\d+$")
 WHITESPACE_PATTERN = re.compile(r"\s+")
+SENTENCE_PATTERN = re.compile(r".+?(?:[.!?…]+(?=\s|$)|$)")
 
 
 def isDataRow(line):
@@ -68,3 +69,29 @@ def readSpokenItems(scriptPath):
 
 def readCleanSpokenText(scriptPath):
 	return [stripMarkers(row["cells"][SPOKEN_COLUMN_INDEX]) for row in readRows(scriptPath)]
+
+
+def readSentences(scriptPath, minWords):
+	# Sentences of the spoken text with stable ids "<row>.<index>"; a sentence shorter than minWords is merged into a
+	# neighbour of the same row (the previous one, or the next one when it opens the row)
+	sentences = []
+	for rowIndex, rowText in enumerate(readCleanSpokenText(scriptPath), start=1):
+		rowSentences = [match.group().strip() for match in SENTENCE_PATTERN.finditer(rowText) if match.group().strip()]
+		merged = []
+		pending = ""
+		for text in rowSentences:
+			text = f"{pending} {text}".strip()
+			pending = ""
+			# French typography puts a space before "?" and ":": count words ("s'en" is one), not whitespace-separated chunks
+			if len(re.findall(r"[\w'’-]+", text)) < minWords:
+				if merged:
+					merged[-1] += " " + text
+				else:
+					pending = text
+				continue
+			merged.append(text)
+		if pending:
+			merged.append(pending)
+		for index, text in enumerate(merged, start=1):
+			sentences.append({"id": f"{rowIndex}.{index}", "row": rowIndex, "text": text})
+	return sentences

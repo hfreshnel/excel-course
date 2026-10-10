@@ -377,7 +377,13 @@ def buildComposition(takeDir):
 	videoDir = takeDir.parent.parent
 	log = json.loads((takeDir / "log.json").read_text(encoding="utf-8"))
 	timeline = json.loads((videoDir / "timeline.json").read_text(encoding="utf-8"))
-	voice = json.loads((videoDir / "recordings" / "voice" / "markers.json").read_text(encoding="utf-8"))
+	# The markers must be those of the voice the take was played against, not whatever voice is current
+	markersPath = Path(log["audio"]).parent / "markers.json"
+	if not markersPath.is_file():
+		raise FileNotFoundError(f"{markersPath} not found: the voice of this take was moved or deleted")
+	voice = json.loads(markersPath.read_text(encoding="utf-8"))
+	if log.get("voiceSource") != voice.get("source") or abs(log.get("audioDuration", 0) - voice.get("duration", 0)) > 0.01:
+		raise RuntimeError(f"take {takeDir.name} was recorded against another voice ({log.get('voiceSource')}, {log.get('audioDuration')} s) than {markersPath} ({voice.get('source')}, {voice.get('duration')} s): record a new take")
 	if not voice.get("words"):
 		raise RuntimeError("markers.json has no word timings: regenerate the voice")
 	leadIn = log["leadIn"]

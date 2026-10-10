@@ -93,10 +93,10 @@ def synthesize(scriptPath, outputDir, rate):
 def main():
 	parser = argparse.ArgumentParser(description="Synthesize a placeholder French voice with SAPI and export marker and word timestamps.")
 	parser.add_argument("script", type=Path)
-	parser.add_argument("--output-dir", type=Path, help="defaults to <video dir>/recordings/voice")
+	parser.add_argument("--output-dir", type=Path, help="defaults to <video dir>/recordings/voice-placeholder (recordings/voice is the recorded narration)")
 	parser.add_argument("--rate", type=int, default=1, help="SAPI rate, -10 to 10")
 	args = parser.parse_args()
-	outputDir = args.output_dir or args.script.parent / "recordings" / "voice"
+	outputDir = args.output_dir or args.script.parent / "recordings" / "voice-placeholder"
 	try:
 		synthesize(args.script, outputDir, args.rate)
 	except Exception:

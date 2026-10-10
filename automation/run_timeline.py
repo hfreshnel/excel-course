@@ -141,7 +141,7 @@ def run(timelinePath, markersPath, statesDir, takeDir, leadIn, tail, frameRate):
 def main():
 	parser = argparse.ArgumentParser(description="Play a video timeline in Excel while capturing the screen, and log real timings and pixel rectangles.")
 	parser.add_argument("timeline", type=Path)
-	parser.add_argument("--markers", type=Path, help="defaults to <video dir>/recordings/voice/markers.json")
+	parser.add_argument("--markers", type=Path, help="defaults to <video dir>/recordings/voice/markers.json (recorded narration), else voice-placeholder/markers.json")
 	parser.add_argument("--states-dir", type=Path, help="defaults to <exercise dir>/states")
 	parser.add_argument("--take-dir", type=Path, help="defaults to <video dir>/recordings/take-<timestamp>")
 	parser.add_argument("--lead-in", type=float, default=1.0)
@@ -149,7 +149,11 @@ def main():
 	parser.add_argument("--frame-rate", type=int, default=30)
 	args = parser.parse_args()
 	videoDir = args.timeline.resolve().parent
-	markersPath = args.markers or videoDir / "recordings" / "voice" / "markers.json"
+	markersPath = args.markers
+	if markersPath is None:
+		recorded = videoDir / "recordings" / "voice" / "markers.json"
+		markersPath = recorded if recorded.is_file() else videoDir / "recordings" / "voice-placeholder" / "markers.json"
+		logger.info("Voice: %s", markersPath)
 	statesDir = args.states_dir or videoDir.parent / "states"
 	takeDir = args.take_dir or videoDir / "recordings" / f"take-{datetime.now():%Y%m%d-%H%M%S}"
 	enableDpiAwareness()
