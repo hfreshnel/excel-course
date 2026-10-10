@@ -16,6 +16,7 @@ const activeCueIndex = (cues: AvatarCue[], time: number): number => {
 };
 
 const imageStyle: React.CSSProperties = { position: "absolute", inset: 0, width: "100%", height: "100%" };
+const mirroredImageStyle: React.CSSProperties = { ...imageStyle, transform: "scaleX(-1)" };
 
 export const ProfessorEx: React.FC<{ avatar: AvatarData }> = ({ avatar }) => {
 	const frame = useCurrentFrame();
@@ -23,7 +24,8 @@ export const ProfessorEx: React.FC<{ avatar: AvatarData }> = ({ avatar }) => {
 	const time = frame / fps;
 	const index = activeCueIndex(avatar.cues, time);
 	const pose = index >= 0 ? avatar.cues[index].pose : avatar.defaultPose;
-	const src = staticFile(avatar.poses[pose] ?? avatar.poses[avatar.defaultPose]);
+	const shownPose = avatar.poses[pose] ? pose : avatar.defaultPose;
+	const src = staticFile(avatar.poses[shownPose]);
 	const cueFrame = index >= 0 ? Math.round(avatar.cues[index].start * fps) : 0;
 	// Poses are swapped with a hard cut plus a small bounce: a cross-fade ghosts the head when the body turns
 	const pop = index >= 0 ? spring({ frame: frame - cueFrame, fps, config: { damping: 11, stiffness: 180, mass: 0.6 } }) : 1;
@@ -36,7 +38,7 @@ export const ProfessorEx: React.FC<{ avatar: AvatarData }> = ({ avatar }) => {
 		<div
 			style={{
 				position: "absolute",
-				left: avatar.left,
+				[avatar.side]: avatar.margin,
 				bottom: 0,
 				width,
 				height: avatar.height,
@@ -44,7 +46,7 @@ export const ProfessorEx: React.FC<{ avatar: AvatarData }> = ({ avatar }) => {
 				transform: `translateY(${(1 - enter) * avatar.height}px) rotate(${sway}deg) scale(${popScale}, ${popScale * breath})`,
 			}}
 		>
-			<Img src={src} style={imageStyle} />
+			<Img src={src} style={avatar.mirroredPoses.includes(shownPose) ? mirroredImageStyle : imageStyle} />
 		</div>
 	);
 };

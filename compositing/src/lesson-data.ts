@@ -40,7 +40,10 @@ export type AvatarData = {
 	imageWidth: number;
 	imageHeight: number;
 	height: number;
-	left: number;
+	side: "left" | "right";
+	margin: number;
+	// Poses drawn facing away from the screen content on this side (e.g. "point" aims up-right), shown mirrored
+	mirroredPoses: string[];
 	defaultPose: string;
 	cues: AvatarCue[];
 };

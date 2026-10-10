@@ -26,6 +26,17 @@ CFG_WEIGHT = 0.5
 # Tried in order until a take passes the Whisper check; a seed forced in voice.json is used alone
 SEEDS = [1234, 1, 2, 3]
 MIN_SIMILARITY = 0.9
+# The last sentence of a video must end falling: Chatterbox sometimes rises on the last syllable (+8 st on
+# "autres"), which sounds unfinished. Measured with Praat on the final voiced run, against the sentence median.
+FINAL_SEEDS = [1234, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+FINAL_MAX_PEAK_ST = 1.0
+FINAL_MAX_RISE_ST = 3.0
+PITCH_FLOOR = 70
+PITCH_CEILING = 300
+MIN_VOICED_RUN_FRAMES = 5
+# The video ends on a long volume fade instead of the usual short one, stretched a little past the last decay
+FINAL_FADE = 1.2
+FINAL_EXTRA_TAIL = 0.25
 MIN_SENTENCE_WORDS = 4
 # Whisper stays on the CPU: Chatterbox already takes ~4 GB of the 6 GB GPU
 WHISPER_DEVICE = "cpu"
@@ -111,7 +122,37 @@ class Synthesizer:
 		return wav.squeeze(0).cpu().numpy().astype(numpy.float32), model.sr
 
 
-def synthesizeSentence(sentence, spokenText, seeds, forced, synthesizer, cacheDir, settingsKey, force):
+def terminalPitch(wavPath, scriptText, words):
+	import parselmouth
+	bounded = scriptBounds(scriptText, words)
+	if not bounded:
+		return None
+	audio, sampleRate = soundfile.read(wavPath, dtype="float64")
+	# Analysed up to the last script word only: babble after it must not count as the ending
+	audio = audio[:int((bounded[-1]["end"] + 0.15) * sampleRate)]
+	frequencies = parselmouth.Sound(audio, sampling_frequency=sampleRate).to_pitch_ac(time_step=0.01, pitch_floor=PITCH_FLOOR, pitch_ceiling=PITCH_CEILING).selected_array["frequency"]
+	voiced = frequencies > 0
+	if not voiced.any():
+		return None
+	runs = []
+	start = None
+	for index, isVoiced in enumerate(list(voiced) + [False]):
+		if isVoiced and start is None:
+			start = index
+		elif not isVoiced and start is not None:
+			if index - start >= MIN_VOICED_RUN_FRAMES:
+				runs.append((start, index))
+			start = None
+	if not runs:
+		return None
+	semitones = 12 * numpy.log2(frequencies[runs[-1][0]:runs[-1][1]] / numpy.median(frequencies[voiced]))
+	lowest = int(numpy.argmin(semitones))
+	peak = float(semitones.max())
+	rise = float(semitones[lowest:].max() - semitones[lowest])
+	return {"peakSt": round(peak, 1), "riseSt": round(rise, 1), "ok": peak <= FINAL_MAX_PEAK_ST and rise <= FINAL_MAX_RISE_ST}
+
+
+def synthesizeSentence(sentence, spokenText, seeds, forced, synthesizer, cacheDir, settingsKey, force, final):
 	attempts = []
 	for seed in seeds:
 		key = hashlib.sha256(json.dumps({"settings": settingsKey, "text": spokenText, "seed": seed}, sort_keys=True).encode("utf-8")).hexdigest()[:20]
@@ -135,11 +176,15 @@ def synthesizeSentence(sentence, spokenText, seeds, forced, synthesizer, cacheDi
 			metaPath.write_text(json.dumps(attempt, indent="\t", ensure_ascii=False) + "\n", encoding="utf-8")
 			attempt["cached"] = False
 		attempt["wav"] = wavPath
+		attempt["terminal"] = terminalPitch(wavPath, sentence["text"], attempt["words"]) if final else None
+		terminalOk = not final or (attempt["terminal"] is not None and attempt["terminal"]["ok"])
 		attempts.append(attempt)
-		logger.info("%-5s seed %-5d similarity %.2f%s", sentence["id"], seed, attempt["similarity"], " (cached)" if attempt["cached"] else f" ({attempt['seconds']} s)")
-		if forced or attempt["similarity"] >= MIN_SIMILARITY:
+		ending = f", ending peak {attempt['terminal']['peakSt']:+.1f} st rise {attempt['terminal']['riseSt']:.1f} st" if attempt["terminal"] else ""
+		logger.info("%-5s seed %-5d similarity %.2f%s%s", sentence["id"], seed, attempt["similarity"], ending, " (cached)" if attempt["cached"] else f" ({attempt['seconds']} s)")
+		if forced or (attempt["similarity"] >= MIN_SIMILARITY and terminalOk):
 			break
-	best = max(attempts, key=lambda item: item["similarity"])
+	# For the last sentence a falling ending outranks similarity
+	best = max(attempts, key=lambda item: (not final or bool(item["terminal"] and item["terminal"]["ok"]), item["similarity"]))
 	best["attempts"] = len(attempts)
 	return best
 
@@ -164,7 +209,7 @@ def scriptBounds(scriptText, words):
 	return words[min(matched):max(matched) + 1]
 
 
-def trimSentence(audio, sampleRate, words):
+def trimSentence(audio, sampleRate, words, final):
 	# Cut where the voice has really decayed after the last word, then fade; the head keeps a short lead-in
 	frame = sampleRate // 100
 	levels = frameLevels(audio, frame)
@@ -182,7 +227,7 @@ def trimSentence(audio, sampleRate, words):
 	else:
 		if first < last:
 			cutFrame = first + int(numpy.argmin(levels[first:last]))
-	end = min(len(audio), int((cutFrame / 100 + END_FADE) * sampleRate))
+	end = min(len(audio), int((cutFrame / 100 + END_FADE + (FINAL_EXTRA_TAIL if final else 0.0)) * sampleRate))
 	firstStart = words[0]["start"]
 	headFrame = int(firstStart * 100)
 	startFrame = max(0, headFrame - int(HEAD_SEARCH * 100))
@@ -192,7 +237,7 @@ def trimSentence(audio, sampleRate, words):
 			break
 	start = max(0, int((startFrame / 100 - HEAD_PAD) * sampleRate))
 	piece = audio[start:end].copy()
-	fade = min(int(END_FADE * sampleRate), len(piece))
+	fade = min(int((FINAL_FADE if final else END_FADE) * sampleRate), len(piece))
 	piece[-fade:] *= (0.5 + 0.5 * numpy.cos(numpy.linspace(0, numpy.pi, fade))).astype(numpy.float32)
 	headFade = min(int(HEAD_FADE * sampleRate), len(piece))
 	piece[:headFade] *= numpy.linspace(0, 1, headFade, dtype=numpy.float32)
@@ -267,6 +312,7 @@ def writeReport(reportPath, scriptPath, takes, extras, duration):
 	]
 	checks = [f"- {take['id']} ({formatTime(take['start'])}) : ressemblance {take['similarity']:.0%} après {take['attempts']} essai(s), Whisper entend « {' '.join(word['text'] for word in take['words'])} »" for take in flagged]
 	checks += [f"- {formatTime(extra['start'])} : mots hors script « {extra['text']} »" for extra in extras]
+	checks += [f"- {take['id']} (dernière phrase) : fin montante après {take['attempts']} essai(s), pic {take['terminal']['peakSt']:+.1f} demi-tons, remontée {take['terminal']['riseSt']:.1f} : écouter, changer la graine dans `{OVERRIDES_NAME}`" for take in takes if take.get("terminal") and not take["terminal"]["ok"]]
 	lines += (checks or ["Aucun."]) + ["", "## Phrases", "", "| Id | Début | Graine | Essais | Ressemblance | Texte envoyé au modèle |", "|---|---|---|---|---|---|"]
 	for take in takes:
 		lines.append(f"| {take['id']} | {formatTime(take['start'])} | {take['seed']} | {take['attempts']} | {take['similarity']:.0%} | {cell(take['spokenText'])} |")
@@ -289,10 +335,12 @@ def synthesize(scriptPath, referencePath, force):
 	for index, sentence in enumerate(sentences):
 		spokenText = textOverrides.get(sentence["id"]) or ttsText(sentence["text"], lexicon)
 		forced = sentence["id"] in seedOverrides
-		seeds = [seedOverrides[sentence["id"]]] if forced else SEEDS
-		take = synthesizeSentence(sentence, spokenText, seeds, forced, synthesizer, cacheDir, settingsKey, force)
+		# A question may rise at the end: only a closing statement is checked
+		final = index == len(sentences) - 1 and not sentence["text"].rstrip().endswith("?")
+		seeds = [seedOverrides[sentence["id"]]] if forced else (FINAL_SEEDS if final else SEEDS)
+		take = synthesizeSentence(sentence, spokenText, seeds, forced, synthesizer, cacheDir, settingsKey, force, final)
 		audio, sampleRate = soundfile.read(take["wav"], dtype="float32")
-		piece, offset = trimSentence(audio, sampleRate, scriptBounds(sentence["text"], take["words"]))
+		piece, offset = trimSentence(audio, sampleRate, scriptBounds(sentence["text"], take["words"]), index == len(sentences) - 1)
 		following = sentences[index + 1] if index + 1 < len(sentences) else None
 		pauseAfter = TAIL_SECONDS if following is None else (ROW_PAUSE if following["row"] != sentence["row"] else SENTENCE_PAUSE)
 		words = [{"text": word["text"], "start": max(0.0, word["start"] - offset), "end": min(len(piece) / sampleRate, word["end"] - offset)} for word in take["words"] if word["end"] > offset]

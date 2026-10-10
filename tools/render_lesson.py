@@ -17,7 +17,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 COMPOSITING_DIR = REPO_ROOT / "compositing"
 AVATAR_DIR = REPO_ROOT / "assets" / "avatar" / "normalized"
 AVATAR_HEIGHT = 420
-AVATAR_LEFT = 24
+# Bottom right: the Excel content sits on the left, and the sheet tabs (bottom left) stay visible
+AVATAR_SIDE = "right"
+AVATAR_MARGIN = 24
+# Drawn aiming up-right: mirrored on the right side so that it points at the content
+AVATAR_RIGHT_SIDE_MIRRORED_POSES = ["point"]
 AVATAR_DEFAULT_POSE = "neutral"
 # A pose outlives the last word of its sentence a little, without overlapping the next word
 POSE_HOLD_SECONDS = 0.3
@@ -323,7 +327,9 @@ def buildAvatar(takeDir):
 		"imageWidth": manifest["width"],
 		"imageHeight": manifest["height"],
 		"height": AVATAR_HEIGHT,
-		"left": AVATAR_LEFT,
+		"side": AVATAR_SIDE,
+		"margin": AVATAR_MARGIN,
+		"mirroredPoses": [pose for pose in AVATAR_RIGHT_SIDE_MIRRORED_POSES if pose in poses] if AVATAR_SIDE == "right" else [],
 		"defaultPose": AVATAR_DEFAULT_POSE,
 		"cues": [],
 	}
