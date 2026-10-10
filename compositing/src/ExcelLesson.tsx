@@ -8,12 +8,13 @@ import { ImageOverlay } from "./ImageOverlay";
 import { MenuPathStrip } from "./MenuPathStrip";
 import { ProfessorEx } from "./ProfessorEx";
 import { StepBanner } from "./StepBanner";
+import { TitleCard } from "./TitleCard";
 import { TypingCard } from "./TypingCard";
 import { fadeOpacity, type LessonData } from "./lesson-data";
 
 const BACKGROUND = "#1B1E24";
 
-export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, typingCards, banners = [], callouts = [], menuPaths = [], images = [], avatar }) => {
+export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, typingCards, banners = [], callouts = [], menuPaths = [], images = [], titleCards = [], avatar }) => {
 	const frame = useCurrentFrame();
 	const { fps } = useVideoConfig();
 	const time = frame / fps;
@@ -40,6 +41,7 @@ export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, 
 				{callouts.map((callout, index) => <CalloutBox key={index} callout={callout} time={time} />)}
 				{menuPaths.map((path, index) => <MenuPathStrip key={index} path={path} time={time} />)}
 				{banners.map((banner, index) => <StepBanner key={index} banner={banner} time={time} />)}
+				{titleCards.map((card, index) => <TitleCard key={index} card={card} time={time} />)}
 			</div>
 			{avatar ? <ProfessorEx avatar={avatar} /> : null}
 			{activeCard ? <TypingCard card={activeCard} time={time} opacity={cardOpacity} /> : null}

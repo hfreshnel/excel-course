@@ -89,6 +89,14 @@ export type ImageOverlay = {
 	position: "center" | "right" | "left";
 };
 
+export type TitleCard = {
+	start: number;
+	end: number;
+	kicker: string;
+	title: string;
+	subtitle: string;
+};
+
 // Times are in seconds of video time; rectangles are in capture pixels
 export type LessonData = {
 	fps: number;
@@ -103,6 +111,7 @@ export type LessonData = {
 	callouts?: Callout[];
 	menuPaths?: MenuPath[];
 	images?: ImageOverlay[];
+	titleCards?: TitleCard[];
 	avatar?: AvatarData;
 };
 

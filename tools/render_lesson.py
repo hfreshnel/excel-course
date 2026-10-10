@@ -68,7 +68,7 @@ TYPED_EVENT_TYPES = {"formula", "name"}
 NAME_BOX_LABEL = "Zone Nom"
 CALLOUT_POSITIONS = {"right", "rightColumn", "center"}
 IMAGE_POSITIONS = {"center", "right", "left"}
-OVERLAY_TYPES = {"banner", "callout", "menuPath", "image"}
+OVERLAY_TYPES = {"banner", "callout", "menuPath", "image", "titleCard"}
 OVERLAY_IMAGES_DIR = "overlays"
 # Highlight colours as "r, g, b"; amber is the default, blue sets a second family apart (video 1: typed vs computed columns)
 HIGHLIGHT_COLORS = {"amber": "255, 179, 0", "blue": "59, 130, 246"}
@@ -334,7 +334,7 @@ def overlayInterval(event, markers, leadIn, videoEnd, index):
 
 
 def buildOverlays(timeline, markers, leadIn, videoEnd, takeDir):
-	banners, callouts, menuPaths, images = [], [], [], []
+	banners, callouts, menuPaths, images, titleCards = [], [], [], [], []
 	for index, event in enumerate(timeline["events"]):
 		eventType = event["type"]
 		if eventType not in OVERLAY_TYPES:
@@ -342,6 +342,8 @@ def buildOverlays(timeline, markers, leadIn, videoEnd, takeDir):
 		markerTime, start, end = overlayInterval(event, markers, leadIn, videoEnd, index)
 		if eventType == "banner":
 			banners.append({"start": start, "end": end, "step": event["step"], "title": event["title"], "done": bool(event.get("done", False))})
+		elif eventType == "titleCard":
+			titleCards.append({"start": start, "end": end, "kicker": event.get("kicker", ""), "title": event["title"], "subtitle": event.get("subtitle", "")})
 		elif eventType == "image":
 			position = event.get("position", "center")
 			if position not in IMAGE_POSITIONS:
@@ -368,8 +370,8 @@ def buildOverlays(timeline, markers, leadIn, videoEnd, takeDir):
 		else:
 			steps = [{"text": step["text"], "time": round(markerTime(step["at"]), 3) if "at" in step else start} for step in event["steps"]]
 			menuPaths.append({"start": start, "end": end, "steps": steps})
-	logger.info("%d banners, %d callouts, %d menu paths, %d images", len(banners), len(callouts), len(menuPaths), len(images))
-	return {"banners": banners, "callouts": callouts, "menuPaths": menuPaths, "images": images}
+	logger.info("%d banners, %d callouts, %d menu paths, %d images, %d title cards", len(banners), len(callouts), len(menuPaths), len(images), len(titleCards))
+	return {"banners": banners, "callouts": callouts, "menuPaths": menuPaths, "images": images, "titleCards": titleCards}
 
 
 def buildAvatar(takeDir):

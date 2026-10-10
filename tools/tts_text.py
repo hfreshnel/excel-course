@@ -12,9 +12,14 @@ DECIMAL_PATTERN = re.compile(r"\b(\d+),(\d+)\b")
 INTEGER_PATTERN = re.compile(r"\b\d+\b")
 UPPERCASE_WORD_PATTERN = re.compile(r"\b[A-ZÀ-Ý]{2,}\b")
 SYMBOLS = {"%": " pour cent", "€": " euros"}
-# Single letters Chatterbox misreads (heard on video 2): "D" as "deux", "H" as "a". Spelled as their French names,
-# both in cell references ("D2") and in spelled acronyms ("H T").
-LETTER_NAMES = {"D": "dé", "H": "ache"}
+# Chatterbox reads a lone consonant as a mute syllable ("T T C" -> "te te", "J2" -> "jeu 2", "D" -> "deux", "H" -> "a",
+# heard on videos 2 and 4): every lone letter is spelled as its French name, in cell references ("D2") and in spelled
+# acronyms ("T V A"). Vowels read alone are left as they are.
+LETTER_NAMES = {
+	"B": "bé", "C": "cé", "D": "dé", "E": "eu", "F": "effe", "G": "jé", "H": "ache", "J": "ji", "K": "ka", "L": "elle",
+	"M": "emme", "N": "enne", "P": "pé", "Q": "ku", "R": "erre", "S": "esse", "T": "té", "V": "vé", "W": "double vé",
+	"X": "ixe", "Z": "zède",
+}
 SINGLE_LETTER_PATTERN = re.compile(r"(?<![\w'’])([A-Z])(?![\w'’])")
 
 

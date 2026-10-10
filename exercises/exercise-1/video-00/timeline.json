@@ -1,0 +1,25 @@
+{
+	"video": "exercise-1/video-00",
+	"startState": "state-00.xlsx",
+	"sheet": "QQ",
+	"view": {"zoom": 90, "scrollRow": 1, "scrollColumn": 1, "activeCell": "A1"},
+	"events": [
+		{"at": "r1", "to": "r2", "type": "titleCard", "kicker": "Masterclass", "title": "Excel — Culture Numérique", "subtitle": "Exercice 1 · Tableau de ventes et graphiques"},
+		{"at": "c1", "to": "c2", "type": "highlight", "target": "A2"},
+		{"at": "c2", "to": "c3", "type": "highlight", "target": "A3"},
+		{"at": "c3", "to": "c4", "type": "highlight", "target": "A4"},
+		{"at": "c4", "to": "cEnd", "type": "highlight", "target": "A5"},
+		{"at": "pTable", "to": "pG1", "type": "image", "src": "exercises/exercise-1/statement/final-table.png", "caption": "Le tableau final (étapes 1 à 5)"},
+		{"at": "pG1", "to": "pG2", "type": "image", "src": "exercises/exercise-1/statement/final-G1.png", "caption": "G1 · Histogramme"},
+		{"at": "pG2", "to": "pG3", "type": "image", "src": "exercises/exercise-1/statement/final-G2.png", "caption": "G2 · Secteurs"},
+		{"at": "pG3", "to": "pG4", "type": "image", "src": "exercises/exercise-1/statement/final-G3.png", "caption": "G3 · Barres"},
+		{"at": "pG4", "offset": 0.0, "duration": 2.2, "type": "image", "src": "exercises/exercise-1/statement/final-G4.png", "caption": "G4 · Combiné"},
+		{"at": "r4", "duration": 6.0, "type": "banner", "step": "Public débutant", "title": "Microsoft 365 en français"},
+		{"at": "spill", "to": "r6", "type": "callout", "title": "Une formule, toute une colonne", "lines": [{"text": "La propagation", "at": "spill"}, {"text": "=Prix_HT*Solde", "detail": "E2 → E13", "kind": "formula", "at": "spillOne"}]},
+		{"at": "fix", "to": "r7", "type": "callout", "title": "Parti pris", "lines": [{"text": "Nous corrigerons les erreurs de l'énoncé", "at": "fix"}]},
+		{"at": "r7", "to": "r8", "type": "callout", "position": "center", "title": "Feuille de route", "lines": [{"text": "1. Construire le tableau", "at": "rm1"}, {"text": "2. Nommer ses plages", "at": "rm2"}, {"text": "3. Prix soldé, économie, évolution", "at": "rm3"}, {"text": "4. TTC, HT et contrôle", "at": "rm4"}, {"text": "5. CA, % CA et synthèses", "at": "rm5"}, {"text": "6. Histogramme « CV Ventes »", "at": "rm6"}, {"text": "7. Secteurs « Répartition du CA TTC »", "at": "rm7"}, {"text": "8. Barres « Sales »", "at": "rm8"}, {"text": "9. Combiné « Evolution »", "at": "rm9"}]},
+		{"at": "fixed", "to": "r9", "type": "callout", "title": "Données fixes de l'énoncé", "lines": [{"text": "Mêmes chiffres que l'énoncé"}, {"text": "Résultats comparables au centime près"}]},
+		{"at": "fixed", "to": "r9", "type": "highlight", "target": "A2"},
+		{"at": "toStep1", "type": "titleCard", "kicker": "Étape 1 sur 9", "title": "Construire le tableau", "subtitle": "Une feuille vierge, de la structure"}
+	]
+}

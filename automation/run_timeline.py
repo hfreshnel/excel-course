@@ -23,7 +23,7 @@ XL_LABEL_POSITIONS = {"outsideEnd": 2, "insideEnd": 3, "center": -4108, "bestFit
 WHOLE_SHEET = "*"
 XL_FILL_DEFAULT = 0
 # Rendered by Remotion from the voice markers only: not played in Excel, so they can change without a new take
-OVERLAY_EVENT_TYPES = {"banner", "callout", "menuPath", "image"}
+OVERLAY_EVENT_TYPES = {"banner", "callout", "menuPath", "image", "titleCard"}
 SETTLE_SECONDS = 1.5
 SPIN_THRESHOLD_SECONDS = 0.02
 
