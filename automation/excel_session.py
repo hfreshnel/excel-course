@@ -36,6 +36,8 @@ UIA_TREE_SCOPE_DESCENDANTS = 4
 UI_ELEMENTS = {
 	"nameBox": {UIA_NAME_PROPERTY_ID: "Zone Nom", UIA_CONTROL_TYPE_PROPERTY_ID: UIA_COMBO_BOX_CONTROL_TYPE_ID},
 	"formulaBar": {UIA_AUTOMATION_ID_PROPERTY_ID: "FormulaBar"},
+	# The "+" button shares its AutomationId ("SheetTab") with the sheet tabs
+	"newSheetButton": {UIA_NAME_PROPERTY_ID: "Ajouter une feuille"},
 }
 
 

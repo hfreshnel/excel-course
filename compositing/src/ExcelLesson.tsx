@@ -4,6 +4,7 @@ import { AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig } f
 import { CalloutBox } from "./CalloutBox";
 import { FocusBlur } from "./FocusBlur";
 import { HighlightBox } from "./HighlightBox";
+import { ImageOverlay } from "./ImageOverlay";
 import { MenuPathStrip } from "./MenuPathStrip";
 import { ProfessorEx } from "./ProfessorEx";
 import { StepBanner } from "./StepBanner";
@@ -12,7 +13,7 @@ import { fadeOpacity, type LessonData } from "./lesson-data";
 
 const BACKGROUND = "#1B1E24";
 
-export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, typingCards, banners = [], callouts = [], menuPaths = [], avatar }) => {
+export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, typingCards, banners = [], callouts = [], menuPaths = [], images = [], avatar }) => {
 	const frame = useCurrentFrame();
 	const { fps } = useVideoConfig();
 	const time = frame / fps;
@@ -27,7 +28,7 @@ export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, 
 				<Video src={staticFile(capture.src)} muted style={{ width: capture.width, height: capture.height }} />
 				{highlights.map((highlight, index) => {
 					const opacity = fadeOpacity(time, highlight.start, highlight.end);
-					return opacity > 0 ? highlight.rects.map((rect, rectIndex) => <HighlightBox key={`${index}-${rectIndex}`} rect={rect} opacity={opacity} />) : null;
+					return opacity > 0 ? highlight.rects.map((rect, rectIndex) => <HighlightBox key={`${index}-${rectIndex}`} rect={rect} opacity={opacity} color={highlight.color} />) : null;
 				})}
 				{activeCard ? (
 					<>
@@ -35,6 +36,7 @@ export const ExcelLesson: React.FC<LessonData> = ({ capture, audio, highlights, 
 						<HighlightBox rect={activeCard.targetRect} opacity={cardOpacity} strong />
 					</>
 				) : null}
+				{images.map((image, index) => <ImageOverlay key={index} image={image} time={time} />)}
 				{callouts.map((callout, index) => <CalloutBox key={index} callout={callout} time={time} />)}
 				{menuPaths.map((path, index) => <MenuPathStrip key={index} path={path} time={time} />)}
 				{banners.map((banner, index) => <StepBanner key={index} banner={banner} time={time} />)}

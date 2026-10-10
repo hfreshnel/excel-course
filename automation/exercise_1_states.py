@@ -82,13 +82,19 @@ def applyStep2(workbook):
 	logger.info("Defined %d names", workbook.Names.Count)
 
 
-def build(statesDir):
+def build(statesDir, startOnly):
 	session = ExcelSession(visible=False)
 	try:
 		session.start()
 		session.openCopy(DATA_PATH, statesDir / "work.tmp.xlsx")
 		workbook = session.workbook
 		session.breakExternalLinks()
+		# Video 1 starts from the statement itself, without the link to the client's machine
+		workbook.Worksheets(SOURCE_SHEET_NAME).Activate()
+		workbook.Worksheets(SOURCE_SHEET_NAME).Range("A1").Select()
+		session.saveAs(statesDir / "state-00.xlsx")
+		if startOnly:
+			return
 		sheet = applyStep1(workbook, session.localFormats())
 		sheet.Activate()
 		sheet.Range("A1").Select()
@@ -104,10 +110,11 @@ def build(statesDir):
 def main():
 	parser = argparse.ArgumentParser(description="Build the end-of-step workbooks of exercise 1 that videos start from.")
 	parser.add_argument("--states-dir", type=Path, default=STATES_DIR)
+	parser.add_argument("--start-only", action="store_true", help="only write state-00.xlsx (video 1 start): states recorded by takes are kept")
 	args = parser.parse_args()
 	enableDpiAwareness()
 	try:
-		build(args.states_dir)
+		build(args.states_dir, args.start_only)
 	except Exception:
 		logger.exception("State build failed")
 		return 1

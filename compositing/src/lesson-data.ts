@@ -9,6 +9,8 @@ export type Highlight = {
 	start: number;
 	end: number;
 	rects: PixelRect[];
+	// "r, g, b"; amber when absent
+	color?: string;
 };
 
 export type FormulaTokenKind = "string" | "number" | "name" | "operator" | "paren" | "separator";
@@ -78,6 +80,15 @@ export type MenuPath = {
 	steps: { text: string; time: number }[];
 };
 
+// A picture shown over the capture (e.g. the chart expected by the statement); src is relative to the take directory
+export type ImageOverlay = {
+	start: number;
+	end: number;
+	src: string;
+	caption: string;
+	position: "center" | "right" | "left";
+};
+
 // Times are in seconds of video time; rectangles are in capture pixels
 export type LessonData = {
 	fps: number;
@@ -91,6 +102,7 @@ export type LessonData = {
 	banners?: StepBanner[];
 	callouts?: Callout[];
 	menuPaths?: MenuPath[];
+	images?: ImageOverlay[];
 	avatar?: AvatarData;
 };
 

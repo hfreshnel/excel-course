@@ -10,9 +10,20 @@ from excel_session import OFFICE_THEME_COLORFUL, ExcelSession, callWithRetry, en
 from ffmpeg_tools import findFfmpeg
 from screen_recorder import ScreenRecorder, normalizeCapture
 
-EXCEL_EVENT_TYPES = {"select", "formula", "value", "name"}
+CHART_EVENT_TYPES = {"chartCreate", "chartMove", "chartTitle", "axisTitle", "seriesDelete", "seriesCategories", "seriesType", "pointSelect", "pointLabel", "chartBackground", "seriesFill", "seriesLine", "pointsFill", "dataLabels", "legend", "explosion"}
+EXCEL_EVENT_TYPES = {"select", "formula", "value", "name", "clear", "addSheet", "renameSheet", "font", "numberFormat", "bold", "tabColor", "autofill", "fitColumns", "activateSheet"} | CHART_EVENT_TYPES
+REPO_ROOT = Path(__file__).resolve().parent.parent
+XL_LOCATION_AS_NEW_SHEET = 1
+XL_CATEGORY = 1
+XL_VALUE = 2
+XL_LEGEND_POSITIONS = {"bottom": -4107, "right": -4152, "top": -4160, "left": -4131}
+MSO_TRUE = -1
+XL_LABEL_POSITIONS = {"outsideEnd": 2, "insideEnd": 3, "center": -4108, "bestFit": 5}
+# "*" targets every cell of the sheet (Ctrl+A); no pixel rectangle is computed for it
+WHOLE_SHEET = "*"
+XL_FILL_DEFAULT = 0
 # Rendered by Remotion from the voice markers only: not played in Excel, so they can change without a new take
-OVERLAY_EVENT_TYPES = {"banner", "callout", "menuPath"}
+OVERLAY_EVENT_TYPES = {"banner", "callout", "menuPath", "image"}
 SETTLE_SECONDS = 1.5
 SPIN_THRESHOLD_SECONDS = 0.02
 
@@ -57,19 +68,220 @@ def waitUntil(deadline):
 			time.sleep(remaining - SPIN_THRESHOLD_SECONDS)
 
 
-def executeEvent(session, sheetName, event):
-	sheet = session.sheet(sheetName)
+def targetRange(sheet, target):
+	return sheet.Cells if target == WHOLE_SHEET else resolveRange(sheet, target)
+
+
+def cellValues(target, value):
+	# A list fills a row or a column, following the shape of the target
+	if not isinstance(value, list):
+		return value
+	if value and isinstance(value[0], list):
+		return tuple(tuple(row) for row in value)
+	if target.Rows.Count == 1:
+		return (tuple(value),)
+	return tuple((item,) for item in value)
+
+
+def fitColumns(sheet, event):
+	# Same widths as automation/exercise_1_states.py: AutoFit plus a margin (text rendered at 90 % overflows a 100 % fit),
+	# and a minimum width from a given column on, so that computed values never show ####
+	columns = sheet.Range(event["target"]).EntireColumn
+	columns.AutoFit()
+	margin = event.get("margin", 0)
+	minWidth = event.get("minWidth", 0)
+	minFrom = sheet.Range(f"{event.get('minFrom', 'A')}1").Column
+	for index in range(1, columns.Columns.Count + 1):
+		current = columns.Columns(index)
+		width = current.ColumnWidth + margin
+		if current.Column >= minFrom:
+			width = max(width, minWidth)
+		current.ColumnWidth = width
+
+
+def bgr(color):
+	red, green, blue = color
+	return red + green * 256 + blue * 65536
+
+
+def chartSeries(chart, key):
+	# A series is designated by its 1-based index or by its name (the column header)
+	collection = chart.SeriesCollection()
+	if isinstance(key, int):
+		return collection.Item(key)
+	for index in range(1, collection.Count + 1):
+		if collection.Item(index).Name == key:
+			return collection.Item(index)
+	raise LookupError(f"no series named '{key}' (series: {[collection.Item(index).Name for index in range(1, collection.Count + 1)]})")
+
+
+def allSeries(chart):
+	collection = chart.SeriesCollection()
+	return [collection.Item(index) for index in range(1, collection.Count + 1)]
+
+
+def executeChartEvent(session, state, event):
 	eventType = event["type"]
-	if eventType == "select":
+	if eventType == "chartCreate":
+		sheet = session.sheet(state["sheet"])
+		# AddChart2 plots the current selection, as the Insert ribbon does
 		callWithRetry(lambda: resolveRange(sheet, event["target"]).Select())
+		shape = callWithRetry(lambda: sheet.Shapes.AddChart2(-1, event["chartType"]))
+		state["chart"] = callWithRetry(lambda: shape.Chart)
+		return
+	chart = state.get("chart")
+	if chart is None:
+		raise RuntimeError(f"{eventType}: no chart created yet in this take")
+	if eventType == "chartMove":
+		callWithRetry(lambda: chart.Location(XL_LOCATION_AS_NEW_SHEET, event["name"]))
+		state["chart"] = session.workbook.Charts(event["name"])
+		state["sheet"] = event["name"]
+	elif eventType == "chartTitle":
+		chart.HasTitle = True
+		chart.ChartTitle.Text = event["text"]
+	elif eventType == "axisTitle":
+		axis = chart.Axes(XL_CATEGORY if event["axis"] == "category" else XL_VALUE, event.get("group", 1))
+		axis.HasTitle = True
+		axis.AxisTitle.Text = event["text"]
+	elif eventType == "seriesDelete":
+		# Excel takes a numeric column (years) for a series: it is removed when present, as the video explains
+		for series in reversed(allSeries(chart)):
+			if series.Name == event["name"]:
+				series.Delete()
+	elif eventType == "seriesCategories":
+		categories = session.sheet(event.get("dataSheet", state["dataSheet"])).Range(event["target"])
+		for series in allSeries(chart):
+			series.XValues = categories
+	elif eventType == "seriesType":
+		series = chartSeries(chart, event["series"])
+		series.ChartType = event["chartType"]
+		series.AxisGroup = event.get("axisGroup", 1)
+	elif eventType == "pointSelect":
+		# Without "point" the whole series is selected (first click), with it a single point (second click)
+		series = chartSeries(chart, event.get("series", 1))
+		if event.get("point") is None:
+			series.Select()
+		else:
+			series.Points(event["point"]).Select()
+	elif eventType == "pointLabel":
+		point = chartSeries(chart, event.get("series", 1)).Points(event["point"])
+		point.HasDataLabel = True
+		point.DataLabel.Text = event["text"]
+	elif eventType == "chartBackground":
+		picture = (REPO_ROOT / event["picture"]).resolve()
+		chart.ChartArea.Format.Fill.UserPicture(str(picture))
+		# The plot area is filled white by default and would hide the wall
+		chart.PlotArea.Format.Fill.Visible = 0
+	elif eventType == "seriesFill":
+		targets = allSeries(chart) if event.get("series", "all") == "all" else [chartSeries(chart, event["series"])]
+		for series in targets:
+			series.Format.Fill.Visible = MSO_TRUE
+			series.Format.Fill.Solid()
+			series.Format.Fill.ForeColor.RGB = bgr(event["color"])
+	elif eventType == "seriesLine":
+		series = chartSeries(chart, event["series"])
+		series.Format.Line.Visible = MSO_TRUE
+		series.Format.Line.ForeColor.RGB = bgr(event["color"])
+		if event.get("weight"):
+			series.Format.Line.Weight = event["weight"]
+	elif eventType == "pointsFill":
+		series = chartSeries(chart, event.get("series", 1))
+		for index, color in enumerate(event["colors"], start=1):
+			fill = series.Points(index).Format.Fill
+			fill.Visible = MSO_TRUE
+			fill.Solid()
+			fill.ForeColor.RGB = bgr(color)
+	elif eventType == "dataLabels":
+		series = chartSeries(chart, event.get("series", 1))
+		series.HasDataLabels = True
+		labels = series.DataLabels()
+		labels.ShowCategoryName = event.get("category", False)
+		labels.ShowValue = event.get("value", True)
+		labels.ShowLegendKey = False
+		if event.get("position"):
+			labels.Position = XL_LABEL_POSITIONS[event["position"]]
+		if "leaderLines" in event:
+			series.HasLeaderLines = event["leaderLines"]
+	elif eventType == "legend":
+		chart.HasLegend = event.get("visible", True)
+		if event.get("visible", True) and event.get("position"):
+			chart.Legend.Position = XL_LEGEND_POSITIONS[event["position"]]
+	elif eventType == "explosion":
+		series = chartSeries(chart, event.get("series", 1))
+		if "value" in event:
+			series.Explosion = event["value"]
+		for pointIndex, value in event.get("points", {}).items():
+			series.Points(int(pointIndex)).Explosion = value
+
+
+def executeEvent(session, state, event, view):
+	eventType = event["type"]
+	if eventType == "chartCreate":
+		# Not retried as a whole: a rejected call after AddChart2 would create a second chart
+		executeChartEvent(session, state, event)
+		return
+	if eventType in CHART_EVENT_TYPES:
+		# The other chart edits are idempotent: a call rejected while Excel redraws is replayed whole
+		callWithRetry(lambda: executeChartEvent(session, state, event))
+		return
+	if eventType == "addSheet":
+		workbook = session.workbook
+		added = callWithRetry(lambda: workbook.Worksheets.Add(None, workbook.Worksheets(event["after"])))
+		state["sheet"] = added.Name
+		# A new sheet opens at 100 %: the take view (zoom, scroll) is applied to it as to the start sheet
+		session.freezeView(state["sheet"], view.get("zoom", 100), 1, 1, "A1")
+		return
+	if eventType == "activateSheet":
+		callWithRetry(lambda: session.workbook.Sheets(event["name"]).Activate())
+		state["sheet"] = event["name"]
+		return
+	if eventType == "renameSheet":
+		sheet = session.sheet(state["sheet"])
+		callWithRetry(lambda: setattr(sheet, "Name", event["name"]))
+		state["sheet"] = event["name"]
+		return
+	sheet = session.sheet(state["sheet"])
+	if eventType == "select":
+		callWithRetry(lambda: targetRange(sheet, event["target"]).Select())
 	elif eventType == "formula":
 		# Formula2Local keeps dynamic-array semantics (no implicit "@") and accepts the French syntax of the scripts
 		callWithRetry(lambda: setattr(sheet.Range(event["target"]), "Formula2Local", event["formula"]))
 	elif eventType == "value":
-		callWithRetry(lambda: setattr(sheet.Range(event["target"]), "Value2", event["value"]))
+		target = resolveRange(sheet, event["target"])
+		callWithRetry(lambda: setattr(target, "Value2", cellValues(target, event["value"])))
+		if event.get("numberFormat"):
+			callWithRetry(lambda: setattr(target, "NumberFormatLocal", session.localFormats()[event["numberFormat"]]))
+	elif eventType == "font":
+		callWithRetry(lambda: setattr(targetRange(sheet, event["target"]).Font, "Name", event["font"]))
+	elif eventType == "numberFormat":
+		# NumberFormat is parsed with the caller locale through pywin32, hence the local formats
+		callWithRetry(lambda: setattr(targetRange(sheet, event["target"]), "NumberFormatLocal", session.localFormats()[event["format"]]))
+	elif eventType == "bold":
+		callWithRetry(lambda: setattr(targetRange(sheet, event["target"]).Font, "Bold", event.get("bold", True)))
+	elif eventType == "tabColor":
+		red, green, blue = event["color"]
+		# Excel colours are BGR integers
+		callWithRetry(lambda: setattr(sheet.Tab, "Color", red + green * 256 + blue * 65536))
+	elif eventType == "autofill":
+		source = resolveRange(sheet, event["target"])
+		callWithRetry(lambda: source.AutoFill(sheet.Range(event["destination"]), XL_FILL_DEFAULT))
+	elif eventType == "fitColumns":
+		callWithRetry(lambda: fitColumns(sheet, event))
+	elif eventType == "clear":
+		# Same effect as the Delete key: contents go, formats stay
+		callWithRetry(lambda: resolveRange(sheet, event["target"]).ClearContents())
 	elif eventType == "name":
 		# The Name Box shows the new name by itself; reselecting a single cell right away would blank it
 		callWithRetry(lambda: setattr(resolveRange(sheet, event["target"]), "Name", event["name"]))
+
+
+def eventRects(session, state, event, uiRects, area):
+	if event.get("ui"):
+		return [uiRects[event["ui"]]]
+	target = event.get("destination") if event["type"] == "autofill" else event.get("target")
+	if not target or target == WHOLE_SHEET or event["type"] in {"addSheet", "renameSheet", "tabColor", "activateSheet"} | CHART_EVENT_TYPES:
+		return None
+	return session.rangeRects(state["sheet"], target, area)
 
 
 def uiKeys(timeline):
@@ -83,7 +295,8 @@ def run(timelinePath, markersPath, statesDir, takeDir, leadIn, tail, frameRate):
 	timeline = loadJson(timelinePath)
 	voice = loadJson(markersPath)
 	schedule = resolveSchedule(timeline, voice["markers"])
-	sheetName = timeline["sheet"]
+	# The current sheet changes when a sheet is added or renamed during the take
+	state = {"sheet": timeline["sheet"], "dataSheet": timeline["sheet"]}
 	view = timeline.get("view", {})
 	takeDir.mkdir(parents=True, exist_ok=True)
 	logEntries = []
@@ -104,7 +317,7 @@ def run(timelinePath, markersPath, statesDir, takeDir, leadIn, tail, frameRate):
 		session.start()
 		log["excel"] = session.describe()
 		session.openCopy(statesDir / timeline["startState"], takeDir / "work.xlsx")
-		session.freezeView(sheetName, view.get("zoom", 100), view.get("scrollRow", 1), view.get("scrollColumn", 1), view.get("activeCell", "A1"))
+		session.freezeView(state["sheet"], view.get("zoom", 100), view.get("scrollRow", 1), view.get("scrollColumn", 1), view.get("activeCell", "A1"))
 		session.bringToFront(topmost=True)
 		session.dismissTransientUi()
 		area = session.workArea()
@@ -124,13 +337,13 @@ def run(timelinePath, markersPath, statesDir, takeDir, leadIn, tail, frameRate):
 			if item["plannedEnd"] is not None:
 				entry["plannedEnd"] = round(item["plannedEnd"], 3)
 			try:
-				executeEvent(session, sheetName, event)
+				executeEvent(session, state, event, view)
 				entry["actualTime"] = round(time.perf_counter() - audioStart, 3)
 				entry["jitter"] = round(entry["actualTime"] - entry["plannedTime"], 3)
-				if event.get("ui"):
-					entry["rects"] = [uiRects[event["ui"]]]
-				elif event.get("target"):
-					entry["rects"] = session.rangeRects(sheetName, event["target"], area)
+				rects = eventRects(session, state, event, uiRects, area)
+				if rects is not None:
+					entry["rects"] = rects
+				entry["sheet"] = state["sheet"]
 				if event["type"] == "name":
 					entry["uiRect"] = uiRects["nameBox"]
 				entry["status"] = "ok"

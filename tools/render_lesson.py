@@ -67,6 +67,11 @@ FORMULA_TOKEN_PATTERN = re.compile(r"""
 TYPED_EVENT_TYPES = {"formula", "name"}
 NAME_BOX_LABEL = "Zone Nom"
 CALLOUT_POSITIONS = {"right", "rightColumn", "center"}
+IMAGE_POSITIONS = {"center", "right", "left"}
+OVERLAY_TYPES = {"banner", "callout", "menuPath", "image"}
+OVERLAY_IMAGES_DIR = "overlays"
+# Highlight colours as "r, g, b"; amber is the default, blue sets a second family apart (video 1: typed vs computed columns)
+HIGHLIGHT_COLORS = {"amber": "255, 179, 0", "blue": "59, 130, 246"}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("renderLesson")
@@ -328,15 +333,27 @@ def overlayInterval(event, markers, leadIn, videoEnd, index):
 	return markerTime, round(start, 3), round(min(end, videoEnd), 3)
 
 
-def buildOverlays(timeline, markers, leadIn, videoEnd):
-	banners, callouts, menuPaths = [], [], []
+def buildOverlays(timeline, markers, leadIn, videoEnd, takeDir):
+	banners, callouts, menuPaths, images = [], [], [], []
 	for index, event in enumerate(timeline["events"]):
 		eventType = event["type"]
-		if eventType not in {"banner", "callout", "menuPath"}:
+		if eventType not in OVERLAY_TYPES:
 			continue
 		markerTime, start, end = overlayInterval(event, markers, leadIn, videoEnd, index)
 		if eventType == "banner":
 			banners.append({"start": start, "end": end, "step": event["step"], "title": event["title"], "done": bool(event.get("done", False))})
+		elif eventType == "image":
+			position = event.get("position", "center")
+			if position not in IMAGE_POSITIONS:
+				raise ValueError(f"overlay event {index}: image position '{position}' not in {sorted(IMAGE_POSITIONS)}")
+			# Remotion serves static files from the take directory (--public-dir), so the picture is copied there
+			source = (REPO_ROOT / event["src"]).resolve()
+			if not source.is_file():
+				raise FileNotFoundError(f"overlay event {index}: image {source} not found")
+			targetDir = takeDir / OVERLAY_IMAGES_DIR
+			targetDir.mkdir(exist_ok=True)
+			shutil.copyfile(source, targetDir / source.name)
+			images.append({"start": start, "end": end, "src": f"{OVERLAY_IMAGES_DIR}/{source.name}", "caption": event.get("caption", ""), "position": position})
 		elif eventType == "callout":
 			position = event.get("position", "right")
 			if position not in CALLOUT_POSITIONS:
@@ -351,8 +368,8 @@ def buildOverlays(timeline, markers, leadIn, videoEnd):
 		else:
 			steps = [{"text": step["text"], "time": round(markerTime(step["at"]), 3) if "at" in step else start} for step in event["steps"]]
 			menuPaths.append({"start": start, "end": end, "steps": steps})
-	logger.info("%d banners, %d callouts, %d menu paths", len(banners), len(callouts), len(menuPaths))
-	return {"banners": banners, "callouts": callouts, "menuPaths": menuPaths}
+	logger.info("%d banners, %d callouts, %d menu paths, %d images", len(banners), len(callouts), len(menuPaths), len(images))
+	return {"banners": banners, "callouts": callouts, "menuPaths": menuPaths, "images": images}
 
 
 def buildAvatar(takeDir):
@@ -445,7 +462,7 @@ def buildComposition(takeDir):
 	wordTimes, wordEnds = alignWordTimes(rows, voice["words"])
 	logByIndex = {entry["index"]: entry for entry in log["events"]}
 	highlights = [
-		{"start": round(entry["plannedTime"] + leadIn, 3), "end": round(entry["plannedEnd"] + leadIn, 3), "rects": entry["rects"]}
+		{"start": round(entry["plannedTime"] + leadIn, 3), "end": round(entry["plannedEnd"] + leadIn, 3), "rects": entry["rects"], "color": HIGHLIGHT_COLORS[timeline["events"][entry["index"]].get("color", "amber")]}
 		for entry in log["events"] if entry["type"] == "highlight" and entry.get("status") == "ok"
 	]
 	area = log["captureArea"]
@@ -459,7 +476,7 @@ def buildComposition(takeDir):
 		"audio": {"src": "audio.wav", "delay": leadIn},
 		"highlights": highlights,
 		"typingCards": buildTypingCards(rows, wordTimes, timeline, logByIndex, leadIn, loadDictationLexicon(videoDir.parent)),
-		**buildOverlays(timeline, voice["markers"], leadIn, log["captureDuration"]),
+		**buildOverlays(timeline, voice["markers"], leadIn, log["captureDuration"], takeDir),
 	}
 	avatar = buildAvatar(takeDir)
 	if avatar is not None:

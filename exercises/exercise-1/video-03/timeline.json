@@ -36,6 +36,13 @@
 		{"at": "setD2", "to": "undoD2", "type": "highlight", "target": "D2"},
 		{"at": "recalc", "to": "undoD2", "type": "highlight", "target": "E2:F2,H2"},
 		{"at": "undoD2", "type": "value", "target": "D2", "value": 95},
-		{"at": "undoD2", "to": "r13", "type": "highlight", "target": "D2:F2,H2"}
+		{"at": "undoD2", "to": "r13", "type": "highlight", "target": "D2:F2,H2"},
+		{"at": "r1", "duration": 5.0, "type": "banner", "step": "Étape 3 sur 9", "title": "Premières formules"},
+		{"at": "r2", "to": "r3", "type": "callout", "title": "Règle d'or", "lines": [{"text": "Une formule commence toujours par ="}]},
+		{"at": "r3", "to": "r4", "type": "callout", "title": "Taux de solde", "lines": [{"text": "Prix soldé = 44 % du prix HT"}, {"text": "Pas une remise de 44 %", "at": "notDiscount"}, {"text": "95 € × 44 % = 41,80 €", "at": "janD2"}]},
+		{"at": "selectE5", "to": "r6", "type": "highlight", "ui": "formulaBar"},
+		{"at": "r8", "to": "r9", "type": "callout", "title": "Formule de l'énoncé", "lines": [{"text": "Évolution % = (Récent − Ancien) / Ancien"}]},
+		{"at": "r11", "to": "r12", "type": "callout", "title": "Piège : différence ≠ évolution %", "lines": [{"text": "96 € − 95 € = 1 €", "detail": "différence", "at": "trapDiff"}, {"text": "1 € / 95 € ≈ 1,05 %", "detail": "évolution", "at": "trapPct"}, {"text": "1 € / 12 € ≈ 8,33 %", "detail": "août", "at": "augH9"}]},
+		{"at": "r13", "type": "banner", "step": "Étape 3 sur 9", "title": "terminée", "done": true}
 	]
 }
