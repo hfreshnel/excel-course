@@ -271,7 +271,13 @@ def executeEvent(session, state, event, view):
 		source = resolveRange(sheet, event["target"])
 		callWithRetry(lambda: source.AutoFill(sheet.Range(event["destination"]), XL_FILL_DEFAULT))
 	elif eventType == "fitColumns":
-		callWithRetry(lambda: fitColumns(sheet, event))
+		# Each width change repaints the grid (4.8 s for 16 columns in the video 1 take): the widths are applied at once
+		application = session.app
+		application.ScreenUpdating = False
+		try:
+			callWithRetry(lambda: fitColumns(sheet, event))
+		finally:
+			application.ScreenUpdating = True
 	elif eventType == "clear":
 		# Same effect as the Delete key: contents go, formats stay
 		callWithRetry(lambda: resolveRange(sheet, event["target"]).ClearContents())
