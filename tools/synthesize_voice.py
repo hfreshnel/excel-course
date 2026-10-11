@@ -238,6 +238,8 @@ def synthesizeSentence(sentence, spokenText, seeds, forced, synthesizer, cacheDi
 				attempt = json.loads(metaPath.read_text(encoding="utf-8"))
 				# Recomputed so that a better comparison (aliases, script fix) applies to cached takes too
 				attempt["similarity"] = round(similarity(sentence["text"], attempt["words"]), 3)
+				# The cache is keyed on the text, not the position: a sentence inserted earlier in the row shifts the ids
+				attempt["id"] = sentence["id"]
 				attempt["cached"] = True
 			except (OSError, ValueError) as error:
 				logger.warning("%s: unreadable cache %s (%s), regenerating", sentence["id"], metaPath.name, error)
