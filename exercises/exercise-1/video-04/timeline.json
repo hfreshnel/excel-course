@@ -27,6 +27,7 @@
 		{"at": "setK5", "type": "value", "target": "K5", "value": 0},
 		{"at": "setK5", "to": "errK2", "type": "highlight", "target": "K5"},
 		{"at": "errK2", "to": "r9", "type": "highlight", "target": "K2"},
+		{"at": "widenK", "offset": 0.8, "type": "fitColumns", "target": "K1", "margin": 1, "minWidth": 11, "minFrom": "K"},
 		{"at": "errK2", "to": "r10", "type": "callout", "title": "Piège : #PROPAGATION!", "lines": [{"text": "Une cellule occupée bloque la zone"}, {"text": "Excel n'écrase jamais son contenu", "at": "r9"}, {"text": "Videz la cellule qui gêne", "at": "blockK5"}]},
 		{"at": "selK2", "type": "select", "target": "K2"},
 		{"at": "blockK5", "to": "r10", "type": "highlight", "target": "K5"},
