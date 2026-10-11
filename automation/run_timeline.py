@@ -228,6 +228,9 @@ def executeEvent(session, state, event, view):
 	if eventType in CHART_EVENT_TYPES:
 		# The other chart edits are idempotent: a call rejected while Excel redraws is replayed whole
 		callWithRetry(lambda: executeChartEvent(session, state, event))
+		# Under load Excel deferred the repaint of a series colour by 25 s (video 6 take): the chart is redrawn now
+		if eventType != "chartMove":
+			callWithRetry(lambda: state["chart"].Refresh())
 		return
 	if eventType == "addSheet":
 		workbook = session.workbook
