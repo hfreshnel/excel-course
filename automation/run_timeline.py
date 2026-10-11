@@ -134,7 +134,12 @@ def executeChartEvent(session, state, event):
 		raise RuntimeError(f"{eventType}: no chart created yet in this take")
 	if eventType == "chartMove":
 		callWithRetry(lambda: chart.Location(XL_LOCATION_AS_NEW_SHEET, event["name"]))
-		state["chart"] = session.workbook.Charts(event["name"])
+		workbook = session.workbook
+		state["chart"] = workbook.Charts(event["name"])
+		# Excel inserts the chart sheet before the data sheet; G1 to G4 are kept after D1, in order
+		state["chart"].Move(None, workbook.Sheets(workbook.Sheets.Count))
+		state["chart"] = workbook.Charts(event["name"])
+		state["chart"].Activate()
 		state["sheet"] = event["name"]
 	elif eventType == "chartTitle":
 		chart.HasTitle = True
