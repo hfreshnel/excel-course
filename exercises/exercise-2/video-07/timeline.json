@@ -1,0 +1,30 @@
+{
+	"video": "exercise-2/video-07",
+	"startState": "state-06.xlsx",
+	"endState": "state-07.xlsx",
+	"sheet": "QS",
+	"view": {"zoom": 90, "scrollRow": 1, "scrollColumn": 1, "activeCell": "A1"},
+	"events": [
+		{"at": "r1", "duration": 5.0, "type": "banner", "step": "Étape 7 sur 12", "title": "Importer un fichier CSV"},
+		{"at": "q19", "to": "r2", "type": "highlight", "target": "A20:P20"},
+		{"at": "what", "to": "r2", "type": "callout", "title": "Un fichier CSV", "lines": [{"text": "Du texte, une ligne par enregistrement"}, {"text": "Des valeurs séparées par une virgule", "at": "comma"}]},
+		{"at": "r2", "to": "r3", "type": "callout", "position": "center", "title": "Début de 02-data.csv", "lines": [{"text": "schoolid,schoolname,CalendarYear,MainOPEID,SchoolCity,…", "kind": "formula", "at": "header"}, {"text": "00100300,Faulkner University,2023,00100300,Montgomery,…", "kind": "formula", "at": "rows7"}, {"text": "00103600,Samford University,2023,00103600,Birmingham,…", "kind": "formula", "at": "rows7"}]},
+		{"at": "dbl", "offset": 0.8, "type": "csvOpen", "src": "exercises/exercise-2/data/02-data.csv"},
+		{"at": "colA", "to": "r4", "type": "callout", "title": "Ouvert d'un double clic", "lines": [{"text": "Une ligne entière par cellule, en colonne A"}]},
+		{"at": "r4", "to": "r5", "type": "callout", "title": "Les zéros de tête disparaîtraient", "lines": [{"text": "00100300 → 100300", "kind": "formula"}, {"text": "Un identifiant n'est pas une quantité", "at": "meaning"}]},
+		{"at": "r5", "type": "csvClose"},
+		{"at": "door", "to": "r6", "type": "menuPath", "steps": [{"text": "Données", "at": "door"}, {"text": "À partir d'un fichier texte/CSV", "at": "button"}, {"text": "02-data.csv", "at": "choose"}]},
+		{"at": "door", "to": "button", "type": "highlight", "ui": "TabData"},
+		{"at": "sep", "to": "r6", "type": "callout", "title": "Aperçu", "lines": [{"text": "Origine : 65001 : Unicode (UTF-8)"}, {"text": "Délimiteur : Virgule", "at": "sep"}]},
+		{"at": "transform", "to": "r7", "type": "menuPath", "steps": [{"text": "Transformer les données", "at": "transform"}, {"text": "Type de données : Texte", "at": "textType"}, {"text": "Remplacer l'étape actuelle", "at": "replace"}]},
+		{"at": "guess", "to": "r7", "type": "callout", "title": "Types détectés", "lines": [{"text": "schoolid : nombre entier → Texte", "kind": "formula", "at": "textType"}, {"text": "MainOPEID : nombre entier → Texte", "kind": "formula", "at": "second"}]},
+		{"at": "r7", "to": "arrive", "type": "menuPath", "steps": [{"text": "Fermer et charger", "at": "r7"}]},
+		{"at": "arrive", "offset": 0.3, "type": "csvImport", "src": "exercises/exercise-2/data/02-data.csv", "sheetName": "Ecoles", "after": "TCD", "tableName": "Ecoles", "textColumnNames": ["schoolid", "MainOPEID"], "textColumns": [1, 4], "columnCount": 10},
+		{"at": "zeros", "to": "r8", "type": "highlight", "target": "A2:A40,D2:D40"},
+		{"at": "refreshAll", "to": "r9", "type": "menuPath", "steps": [{"text": "Données", "at": "refreshAll"}, {"text": "Actualiser tout", "at": "refreshAll"}]},
+		{"at": "refreshAll", "to": "r9", "type": "highlight", "ui": "TabData"},
+		{"at": "r9", "to": "r10", "type": "callout", "title": "Le CSV reste la source brute", "lines": [{"text": "Ni formules, ni mise en forme, ni autres feuilles", "at": "noCsv"}, {"text": "Le travail se fait en .xlsx", "kind": "formula", "at": "xlsx"}]},
+		{"at": "r10", "type": "banner", "step": "Étape 7 sur 12", "title": "terminée", "done": true},
+		{"at": "r10", "to": "assets", "type": "highlight", "target": "A1:J1"}
+	]
+}

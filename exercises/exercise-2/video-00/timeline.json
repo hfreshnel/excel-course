@@ -1,0 +1,27 @@
+{
+	"video": "exercise-2/video-00",
+	"startState": "state-00.xlsx",
+	"sheet": "QS",
+	"view": {"zoom": 90, "scrollRow": 1, "scrollColumn": 1, "activeCell": "A1"},
+	"events": [
+		{"at": "r1", "to": "r2", "type": "titleCard", "kicker": "Masterclass", "title": "Excel — Culture Numérique", "subtitle": "Exercice 2 · Interroger, rechercher, résumer"},
+		{"at": "qAll", "to": "qFirst", "type": "highlight", "target": "A2:P26"},
+		{"at": "qFirst", "to": "qLast", "type": "highlight", "target": "A2:P4"},
+		{"at": "qLast", "to": "r3", "type": "highlight", "target": "A24:P26"},
+		{"at": "sQ1", "type": "activateSheet", "name": "Q1", "zoom": 90},
+		{"at": "sQ1", "offset": 0.3, "to": "sS2", "type": "highlight", "target": "A1:J19"},
+		{"at": "sS2", "type": "activateSheet", "name": "S2", "zoom": 90},
+		{"at": "sS2", "offset": 0.3, "to": "sS3", "type": "highlight", "target": "A1:K19,A33:D40"},
+		{"at": "sS3", "type": "activateSheet", "name": "S3", "zoom": 90},
+		{"at": "sS3", "offset": 0.3, "to": "csv", "type": "highlight", "target": "A4:E18,B24:F38"},
+		{"at": "csv", "type": "activateSheet", "name": "QS", "zoom": 90},
+		{"at": "csv", "to": "r4", "type": "callout", "title": "Fichier fourni", "lines": [{"text": "02-data.csv", "kind": "formula"}, {"text": "210 établissements d'enseignement américains"}]},
+		{"at": "r4", "to": "r5", "type": "callout", "position": "rightColumn", "title": "Feuille de route", "lines": [{"text": "Nommer et compter", "detail": "Étape 1", "at": "rm1"}, {"text": "Additionner, moyenner, extrêmes", "detail": "Étape 2", "at": "rm1"}, {"text": "Liste et recherche", "detail": "Étape 3", "at": "rm3"}, {"text": "Graphique dynamique", "detail": "Étape 4", "at": "rm3"}, {"text": "Sous-totaux et tableau de bord", "detail": "Étape 5", "at": "rm5"}, {"text": "Tableau croisé dynamique", "detail": "Étape 6", "at": "rm5"}, {"text": "Importer un fichier CSV", "detail": "Étape 7", "at": "rm5"}, {"text": "Tableaux et références", "detail": "Étape 8", "at": "rm5"}, {"text": "SI imbriqués", "detail": "Étape 9", "at": "rm9"}, {"text": "ET, OU et NON", "detail": "Étape 10", "at": "rm9"}, {"text": "TRANSPOSE, RECHERCHEH, RECHERCHEX", "detail": "Étape 11", "at": "rm9"}, {"text": "INDEX et EQUIV", "detail": "Étape 12", "at": "rm9"}]},
+		{"at": "r5", "to": "r6", "type": "callout", "title": "Prérequis", "lines": [{"text": "Excel Microsoft 365, en français", "at": "m365"}, {"text": "Formules propagées", "at": "spill"}, {"text": "RECHERCHEX (absente des anciennes versions)", "kind": "text", "at": "xlookup"}]},
+		{"at": "r6", "to": "r7", "type": "callout", "title": "Erreurs de l'énoncé, corrigées en chemin", "lines": [{"text": "Un libellé mal orthographié", "at": "e1"}, {"text": "Un en-tête qui ne correspond pas", "at": "e2"}, {"text": "Une espace invisible", "at": "e3"}]},
+		{"at": "r7", "to": "r8", "type": "callout", "title": "Données de l'énoncé conservées", "lines": [{"text": "Vos résultats doivent tomber juste, au centime près"}]},
+		{"at": "r8", "type": "activateSheet", "name": "Q1", "zoom": 90},
+		{"at": "q", "to": "step1", "type": "highlight", "target": "D2:D19"},
+		{"at": "step1", "type": "banner", "step": "Étape 1 sur 12", "title": "Nommer et compter"}
+	]
+}

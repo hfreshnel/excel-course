@@ -120,12 +120,12 @@ Vidéos 0 à 2 identiques à la v2 du 2026-10-11 (restes déjà relevés : dict�
 - Question 19 : `02-data.csv` est-il bien le fichier visé ? Rôle des CSV `04` à `08` ?
 - Feuilles masquées `S5`, `SOL`, `CC` : le corrigé est livré dans le fichier de l'élève.
 
-**Pipeline, avant les prises**
-- `tokenizeFormula` (`tools/render_lesson.py`) ne reconnaît pas `$` : accepter `$` dans le motif des noms suffit, avec les entrées de `dictation-lexicon.json` (simulation faite le 2026-10-12 : vidéos 8 et 10 alignées).
-- Références structurées (`Produits[@[Price 1]:[Price 4]]` et `Produits[Moyenne]`, vidéo 8) : `"card": false`, ou extension du découpeur.
-- Timelines et marqueurs `{@…}` à écrire. Événements à ajouter à `run_timeline.py` : validation de données (liste), sous-totaux et niveaux de plan, TCD (création, champs, filtre) et graphique croisé, tableau (création, nom, redimensionnement), import du CSV, ouverture d'un CSV dans un second classeur, recopie d'un bloc fusionné.
-- Génération de `state-00.xlsx` (énoncé + salaires).
-- Import du CSV par COM : le chargement Power Query échoue (`E_INVALIDARG`) dans une instance invisible ; à réessayer dans l'instance visible de la prise, sinon repli sur `QueryTables.Add("TEXT;…")` (détail dans la note de la vidéo 7).
+**Pipeline : prêt pour les prises (2026-10-12)**
+- Fait : marqueurs `{@…}` posés dans les 13 scripts (texte prononcé inchangé, voix reprise du cache, `markers.json` régénérés) ; 13 `timeline.json` ; `automation/exercise_2_states.py` (état de départ) ; `run_timeline.py` étendu (voir ci-dessous) ; `$` accepté par les cartes de saisie de `render_lesson.py`.
+- **Validé à blanc** : les 13 timelines jouées dans l'ordre par `run_timeline.py --dry-run` (Excel invisible, sans capture) : 0 échec, états 01 à 12 écrits et contrôlés (toutes les valeurs de contrôle, disposition de S3 intacte) ; `render_lesson.py --data-only` sur chaque essai : 41 cartes de saisie alignées sur leur dictée, encadrés, chemins, bandeaux et poses construits sans erreur. Exercice 1 non affecté (trois timelines rejouées à blanc, ses 17 cartes de saisie vérifiées).
+- Restent pour les prises : cadrage à contrôler sur l'aperçu de la vidéo 1 (rectangles calculés dans la fenêtre visible, avatar en bas à droite) ; import du CSV (vidéo 7) : le chargement Power Query échoue par COM dans une instance invisible (`E_INVALIDARG`), la prise le tente puis se replie sur l'import texte (`QueryTables`, mêmes types de colonnes, converti en tableau), à juger à l'image.
+- Références structurées (`Produits[@[Price 1]:[Price 4]]`, `Produits[Moyenne]`, vidéo 8) : sans carte de saisie (`"card": false`), formule montrée dans un encadré.
+- Événements ajoutés à `run_timeline.py` : `scroll`, `validation`, `subtotal`, `outline`, `pivotCreate`, `pivotField`, `pivotFilter`, `pivotChart`, `tableCreate`, `tableRename`, `tableResize`, `csvOpen`, `csvClose`, `csvImport` ; `activateSheet` accepte `zoom` et `scrollRow` (les feuilles de l'énoncé gardent sinon leur zoom enregistré). Cadrage à 90 % : environ 40 lignes visibles (A à N sur Q1, A à K sur S2 et S3) ; défilement de départ par vidéo dans `view.scrollRow`.
 
 ## Vérifications dans Excel (2026-10-12)
 

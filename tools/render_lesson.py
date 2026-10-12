@@ -59,7 +59,7 @@ DICTATION_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
 FORMULA_TOKEN_PATTERN = re.compile(r"""
 	(?P<string>"[^"]*")
 	|(?P<number>\d+(?:,\d+)?%?)
-	|(?P<name>[A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_.]*)
+	|(?P<name>[$A-Za-zÀ-ÿ_][$A-Za-zÀ-ÿ0-9_.]*)
 	|(?P<operator><>|<=|>=|[=+\-*/^&<>])
 	|(?P<paren>[()])
 	|(?P<separator>[;:])
@@ -513,6 +513,9 @@ def main():
 		composition = buildComposition(takeDir)
 		(takeDir / "composition.json").write_text(json.dumps(composition, indent="\t", ensure_ascii=False) + "\n", encoding="utf-8")
 		logger.info("%d highlights, %d typing cards -> %s", len(composition["highlights"]), len(composition["typingCards"]), takeDir / "composition.json")
+		# A dry run has no capture: its composition only validates the timeline against the script and the voice
+		if json.loads((takeDir / "log.json").read_text(encoding="utf-8")).get("dryRun") and not args.data_only:
+			raise RuntimeError(f"{takeDir.name} is a dry run (no capture): use --data-only, or record a take with run_timeline.py")
 		if not args.data_only:
 			render(takeDir, outputPath, args.concurrency)
 	except Exception:

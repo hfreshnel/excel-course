@@ -1,17 +1,40 @@
 import argparse
 import json
 import logging
+import shutil
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+import pythoncom
 
 from excel_session import OFFICE_THEME_COLORFUL, ExcelSession, callWithRetry, enableDpiAwareness, resolveRange
 from ffmpeg_tools import findFfmpeg
 from screen_recorder import ScreenRecorder, normalizeCapture
 
 CHART_EVENT_TYPES = {"chartCreate", "chartMove", "chartTitle", "axisTitle", "seriesDelete", "seriesCategories", "seriesType", "pointSelect", "pointLabel", "chartBackground", "seriesFill", "seriesLine", "pointsFill", "dataLabels", "legend", "explosion"}
-EXCEL_EVENT_TYPES = {"select", "formula", "value", "name", "clear", "addSheet", "renameSheet", "font", "numberFormat", "bold", "tabColor", "autofill", "fitColumns", "activateSheet"} | CHART_EVENT_TYPES
+# Added for exercise 2: data tools, pivot tables, Excel tables and CSV files (all run through COM, option A)
+DATA_EVENT_TYPES = {"scroll", "validation", "subtotal", "outline", "pivotCreate", "pivotField", "pivotFilter", "pivotChart", "tableCreate", "tableRename", "tableResize", "csvOpen", "csvClose", "csvImport"}
+EXCEL_EVENT_TYPES = {"select", "formula", "value", "name", "clear", "addSheet", "renameSheet", "font", "numberFormat", "bold", "tabColor", "autofill", "fitColumns", "activateSheet"} | CHART_EVENT_TYPES | DATA_EVENT_TYPES
+# No pixel rectangle for events that do not act on a range of the current sheet
+RECTLESS_EVENT_TYPES = {"addSheet", "renameSheet", "tabColor", "activateSheet", "scroll", "outline", "pivotCreate", "pivotField", "pivotFilter", "pivotChart", "tableRename", "tableResize", "csvOpen", "csvClose", "csvImport"} | CHART_EVENT_TYPES
+XL_VALIDATE_LIST = 3
+XL_VALID_ALERT_STOP = 1
+XL_BETWEEN = 1
+XL_SUM = -4157
+XL_SUMMARY_BELOW = 1
+XL_DATABASE = 1
+XL_PIVOT_ORIENTATIONS = {"hidden": 0, "row": 1, "column": 2, "page": 3}
+XL_SRC_RANGE = 1
+XL_SRC_EXTERNAL = 0
+XL_YES = 1
+XL_DELIMITED = 1
+XL_TEXT_QUALIFIER_DOUBLE_QUOTE = 1
+XL_GENERAL_FORMAT = 1
+XL_TEXT_FORMAT = 2
+UTF8_CODE_PAGE = 65001
+XL_CMD_SQL = 2
 REPO_ROOT = Path(__file__).resolve().parent.parent
 XL_LOCATION_AS_NEW_SHEET = 1
 XL_CATEGORY = 1
@@ -219,8 +242,137 @@ def executeChartEvent(session, state, event):
 			series.Points(int(pointIndex)).Explosion = value
 
 
+def powerQueryFormula(csvPath, textColumns):
+	path = str(csvPath).replace('"', '""')
+	types = ", ".join(f'{{"{name}", type text}}' for name in textColumns)
+	return (f'let Source = Csv.Document(File.Contents("{path}"), [Delimiter=",", Encoding={UTF8_CODE_PAGE}, QuoteStyle=QuoteStyle.Csv]),'
+		f' Headers = Table.PromoteHeaders(Source, [PromoteAllScalars=true]), Typed = Table.TransformColumnTypes(Headers, {{{types}}}) in Typed')
+
+
+def importCsv(session, sheet, csvPath, event):
+	# Power Query first, as the video shows; loading it through COM failed with E_INVALIDARG in a hidden instance
+	# (2026-10-12), so the legacy text import with the same column types is the fallback
+	name = event.get("tableName", sheet.Name)
+	try:
+		session.workbook.Queries.Add(name, powerQueryFormula(csvPath, event["textColumnNames"]))
+		connection = f'OLEDB;Provider=Microsoft.Mashup.OleDb.1;Data Source=$Workbook$;Location="{name}";Extended Properties=""'
+		table = sheet.ListObjects.Add(XL_SRC_EXTERNAL, connection, pythoncom.Missing, XL_YES, sheet.Range("$A$1"))
+		table.QueryTable.CommandType = XL_CMD_SQL
+		table.QueryTable.CommandText = f"SELECT * FROM [{name}]"
+		table.QueryTable.Refresh(False)
+		return "powerQuery"
+	except Exception:
+		logger.warning("Power Query load through COM failed, falling back to the legacy text import", exc_info=True)
+	query = sheet.QueryTables.Add(f"TEXT;{csvPath}", sheet.Range("$A$1"))
+	query.TextFileParseType = XL_DELIMITED
+	query.TextFileCommaDelimiter = True
+	query.TextFileTextQualifier = XL_TEXT_QUALIFIER_DOUBLE_QUOTE
+	query.TextFilePlatform = UTF8_CODE_PAGE
+	textColumns = set(event["textColumns"])
+	query.TextFileColumnDataTypes = [XL_TEXT_FORMAT if index in textColumns else XL_GENERAL_FORMAT for index in range(1, event["columnCount"] + 1)]
+	query.Refresh(False)
+	data = query.ResultRange
+	# The query table is dropped (its data stays) so that the range can become an Excel table like the Power Query output
+	query.Delete()
+	table = sheet.ListObjects.Add(XL_SRC_RANGE, data, pythoncom.Missing, XL_YES)
+	table.Name = name
+	return "textImport"
+
+
+def executeDataEvent(session, state, event, view):
+	eventType = event["type"]
+	if eventType == "scroll":
+		window = session.app.ActiveWindow
+		window.ScrollRow = event.get("row", window.ScrollRow)
+		window.ScrollColumn = event.get("column", window.ScrollColumn)
+		return
+	if eventType == "csvOpen":
+		# Opening the file as a double click does: Excel splits it at the regional list separator
+		source = (REPO_ROOT / event["src"]).resolve()
+		copy = state["takeDir"] / source.name
+		shutil.copyfile(source, copy)
+		state["csvBook"] = session.app.Workbooks.Open(str(copy))
+		return
+	if eventType == "csvClose":
+		book = state.pop("csvBook", None)
+		if book is not None:
+			book.Close(False)
+		session.workbook.Activate()
+		session.sheet(state["sheet"]).Activate()
+		return
+	workbook = session.workbook
+	if eventType == "csvImport":
+		sheet = workbook.Worksheets.Add(None, workbook.Worksheets(event["after"]))
+		sheet.Name = event["sheetName"]
+		state["sheet"] = sheet.Name
+		session.freezeView(state["sheet"], view.get("zoom", 100), 1, 1, "A1")
+		source = (REPO_ROOT / event["src"]).resolve()
+		copy = state["takeDir"] / source.name
+		shutil.copyfile(source, copy)
+		state["csvImport"] = importCsv(session, sheet, copy, event)
+		return
+	if eventType == "pivotCreate":
+		source = resolveRange(session.sheet(state["sheet"]), event["target"])
+		cache = workbook.PivotCaches().Create(XL_DATABASE, source)
+		sheet = workbook.Worksheets.Add(None, workbook.Worksheets(event["after"]))
+		sheet.Name = event["sheetName"]
+		state["sheet"] = sheet.Name
+		session.freezeView(state["sheet"], view.get("zoom", 100), 1, 1, "A1")
+		state["pivot"] = cache.CreatePivotTable(sheet.Range(event.get("destination", "A3")), event.get("name", sheet.Name))
+		return
+	if eventType in {"pivotField", "pivotFilter", "pivotChart"}:
+		pivot = state.get("pivot")
+		if pivot is None:
+			raise RuntimeError(f"{eventType}: no pivot table created yet in this take")
+		if eventType == "pivotField":
+			field = pivot.PivotFields(event["field"])
+			if event["orientation"] == "data":
+				# Numeric fields are summed by default ("Somme de …"), as in the field list
+				pivot.AddDataField(field)
+			else:
+				field.Orientation = XL_PIVOT_ORIENTATIONS[event["orientation"]]
+		elif eventType == "pivotFilter":
+			pivot.PivotFields(event["field"]).CurrentPage = event["item"]
+		else:
+			# A chart created while the pivot table is selected is a pivot chart
+			pivot.TableRange1.Select()
+			shape = session.sheet(state["sheet"]).Shapes.AddChart2(-1, event["chartType"])
+			state["chart"] = shape.Chart
+		return
+	sheet = session.sheet(state["sheet"])
+	if eventType == "validation":
+		validation = resolveRange(sheet, event["target"]).Validation
+		# The statement may already carry a rule on the cell (Q1!E22): it is replaced, as the video rebuilds it
+		validation.Delete()
+		validation.Add(XL_VALIDATE_LIST, XL_VALID_ALERT_STOP, XL_BETWEEN, event["source"])
+	elif eventType == "subtotal":
+		resolveRange(sheet, event["target"]).Subtotal(event["groupBy"], XL_SUM, tuple(event["columns"]), True, False, XL_SUMMARY_BELOW)
+	elif eventType == "outline":
+		sheet.Outline.ShowLevels(event["level"])
+	elif eventType == "tableCreate":
+		table = sheet.ListObjects.Add(XL_SRC_RANGE, resolveRange(sheet, event["target"]), pythoncom.Missing, XL_YES)
+		# Without a name the table keeps Excel's default one, as after Insert > Table
+		if event.get("name"):
+			table.Name = event["name"]
+	elif eventType == "tableRename":
+		# The table is designated by one of its cells: its default name depends on the tables already in the workbook
+		sheet.Range(event["target"]).ListObject.Name = event["newName"]
+	elif eventType == "tableResize":
+		# Undo of a typed row: the row is cleared, then the table is brought back to its range
+		sheet.ListObjects(event["name"]).Resize(sheet.Range(event["target"]))
+
+
 def executeEvent(session, state, event, view):
 	eventType = event["type"]
+	if eventType in DATA_EVENT_TYPES:
+		# csvImport, pivotCreate and csvOpen create objects: they are not retried as a whole
+		if eventType in {"csvImport", "pivotCreate", "csvOpen", "pivotChart", "subtotal"}:
+			executeDataEvent(session, state, event, view)
+		else:
+			callWithRetry(lambda: executeDataEvent(session, state, event, view))
+		if state.get("chart") is not None and eventType in {"pivotField", "pivotFilter"}:
+			callWithRetry(lambda: state["chart"].Refresh())
+		return
 	if eventType == "chartCreate":
 		# Not retried as a whole: a rejected call after AddChart2 would create a second chart
 		executeChartEvent(session, state, event)
@@ -242,6 +394,12 @@ def executeEvent(session, state, event, view):
 	if eventType == "activateSheet":
 		callWithRetry(lambda: session.workbook.Sheets(event["name"]).Activate())
 		state["sheet"] = event["name"]
+		# Optional: the statement sheets keep the zoom they were saved with, so a take can impose its own
+		if "zoom" in event or "scrollRow" in event:
+			window = session.app.ActiveWindow
+			callWithRetry(lambda: setattr(window, "Zoom", event.get("zoom", window.Zoom)))
+			callWithRetry(lambda: setattr(window, "ScrollRow", event.get("scrollRow", 1)))
+			callWithRetry(lambda: setattr(window, "ScrollColumn", event.get("scrollColumn", 1)))
 		return
 	if eventType == "renameSheet":
 		sheet = session.sheet(state["sheet"])
@@ -293,7 +451,7 @@ def eventRects(session, state, event, uiRects, area):
 	if event.get("ui"):
 		return [uiRects[event["ui"]]]
 	target = event.get("destination") if event["type"] == "autofill" else event.get("target")
-	if not target or target == WHOLE_SHEET or event["type"] in {"addSheet", "renameSheet", "tabColor", "activateSheet"} | CHART_EVENT_TYPES:
+	if not target or target == WHOLE_SHEET or event["type"] in RECTLESS_EVENT_TYPES:
 		return None
 	return session.rangeRects(state["sheet"], target, area)
 
@@ -305,12 +463,66 @@ def uiKeys(timeline):
 	return sorted(keys)
 
 
+def dryRun(timelinePath, markersPath, statesDir, takeDir, leadIn, tail):
+	# Plays every Excel event in order in a hidden Excel, without capture nor clock: it checks a timeline against its start
+	# state and writes the end state for the next video. Rectangles are those of the hidden window (not the capture area).
+	timeline = loadJson(timelinePath)
+	voice = loadJson(markersPath)
+	schedule = resolveSchedule(timeline, voice["markers"])
+	state = {"sheet": timeline["sheet"], "dataSheet": timeline["sheet"], "takeDir": takeDir}
+	view = timeline.get("view", {})
+	takeDir.mkdir(parents=True, exist_ok=True)
+	logEntries = []
+	log = {"video": timeline["video"], "dryRun": True, "createdAt": datetime.now().isoformat(timespec="seconds"), "timeBase": "seconds from audio start; video time = audio time + leadIn",
+		"leadIn": leadIn, "audio": str((Path(markersPath).parent / voice["audio"]).resolve()), "audioDuration": voice["duration"], "voiceSource": voice.get("source"),
+		"capture": "capture.mp4", "captureDuration": round(leadIn + voice["duration"] + tail, 3), "events": logEntries}
+	session = ExcelSession(visible=False)
+	try:
+		session.start()
+		log["excel"] = session.describe()
+		session.openCopy(statesDir / timeline["startState"], takeDir / "work.xlsx")
+		session.freezeView(state["sheet"], view.get("zoom", 100), view.get("scrollRow", 1), view.get("scrollColumn", 1), view.get("activeCell", "A1"))
+		area = session.workArea()
+		log["captureArea"] = area
+		log["view"] = view
+		uiRects = {key: {"address": f"ui:{key}", "x": 0, "y": 0, "w": 1, "h": 1, "check": "ui"} for key in uiKeys(timeline)}
+		log["uiRects"] = uiRects
+		for item in schedule:
+			event = item["event"]
+			entry = {"index": item["index"], "type": event["type"], "at": event["at"], "target": event.get("target") or event.get("ui"), "plannedTime": round(item["plannedTime"], 3), "actualTime": round(item["plannedTime"], 3), "jitter": 0.0}
+			if item["plannedEnd"] is not None:
+				entry["plannedEnd"] = round(item["plannedEnd"], 3)
+			try:
+				executeEvent(session, state, event, view)
+				rects = eventRects(session, state, event, uiRects, area)
+				if rects is not None:
+					entry["rects"] = rects
+				entry["sheet"] = state["sheet"]
+				if event["type"] == "name":
+					entry["uiRect"] = uiRects["nameBox"]
+				entry["status"] = "ok"
+			except Exception as error:
+				entry["status"] = f"error: {error}"
+				logger.exception("Event %d (%s %s) failed", item["index"], event["type"], event.get("target"))
+			logEntries.append(entry)
+		if state.get("csvImport"):
+			log["csvImport"] = state["csvImport"]
+		if timeline.get("endState") and all(entry["status"] == "ok" for entry in logEntries):
+			session.saveAs(statesDir / timeline["endState"])
+	finally:
+		session.close()
+		(takeDir / "log.json").write_text(json.dumps(log, indent="\t", ensure_ascii=False) + "\n", encoding="utf-8")
+	failures = [entry for entry in logEntries if entry.get("status") != "ok"]
+	logger.info("Dry run: %d events, %d failures", len(logEntries), len(failures))
+	return not failures
+
+
 def run(timelinePath, markersPath, statesDir, takeDir, leadIn, tail, frameRate):
 	timeline = loadJson(timelinePath)
 	voice = loadJson(markersPath)
 	schedule = resolveSchedule(timeline, voice["markers"])
 	# The current sheet changes when a sheet is added or renamed during the take
-	state = {"sheet": timeline["sheet"], "dataSheet": timeline["sheet"]}
+	state = {"sheet": timeline["sheet"], "dataSheet": timeline["sheet"], "takeDir": takeDir}
 	view = timeline.get("view", {})
 	takeDir.mkdir(parents=True, exist_ok=True)
 	logEntries = []
@@ -394,6 +606,7 @@ def main():
 	parser.add_argument("--lead-in", type=float, default=1.0)
 	parser.add_argument("--tail", type=float, default=1.5)
 	parser.add_argument("--frame-rate", type=int, default=30)
+	parser.add_argument("--dry-run", action="store_true", help="play the Excel events in a hidden Excel, without capture nor clock (writes the end state)")
 	args = parser.parse_args()
 	videoDir = args.timeline.resolve().parent
 	markersPath = args.markers
@@ -402,10 +615,14 @@ def main():
 		markersPath = recorded if recorded.is_file() else videoDir / "recordings" / "voice-placeholder" / "markers.json"
 		logger.info("Voice: %s", markersPath)
 	statesDir = args.states_dir or videoDir.parent / "states"
-	takeDir = args.take_dir or videoDir / "recordings" / f"take-{datetime.now():%Y%m%d-%H%M%S}"
+	prefix = "dryrun" if args.dry_run else "take"
+	takeDir = args.take_dir or videoDir / "recordings" / f"{prefix}-{datetime.now():%Y%m%d-%H%M%S}"
 	enableDpiAwareness()
 	try:
-		succeeded = run(args.timeline, markersPath, statesDir, takeDir, args.lead_in, args.tail, args.frame_rate)
+		if args.dry_run:
+			succeeded = dryRun(args.timeline, markersPath, statesDir, takeDir, args.lead_in, args.tail)
+		else:
+			succeeded = run(args.timeline, markersPath, statesDir, takeDir, args.lead_in, args.tail, args.frame_rate)
 	except Exception:
 		logger.exception("Timeline run failed")
 		return 1
