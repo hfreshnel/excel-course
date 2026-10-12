@@ -17,13 +17,13 @@ Version de travail du 2026-10-12 : scripts du collègue (pack final reçu le 202
 | 5 | Sous-totaux et tableau de bord | 16 | S2 | 2 min 55 |
 | 6 | Tableau et graphique croisés dynamiques | 17 et 18 | S2, TCD | 2 min 20 |
 | 7 | Importer un fichier CSV | 19 | Ecoles | 2 min 40 |
-| 8 | Tableaux structurés et références | 20 et 21 | S3 | 3 min 50 |
+| 8 | Tableaux structurés et références | 20 et 21 | S3 | 4 min 15 |
 | 9 | SI imbriqués | 22 | S3 | 2 min 30 |
-| 10 | ET, OU et NON | 23 | S3 | 4 min 25 |
+| 10 | ET, OU et NON | 23 | S3 | 4 min 35 |
 | 11 | TRANSPOSE, RECHERCHEH, RECHERCHEX | 24 | S3 | 3 min 10 |
 | 12 | INDEX et EQUIV, bilan | 25 | S3 | 3 min 15 |
 
-Total : environ 41 min de texte parlé (140 mots/min, à recaler sur la voix). Le collègue proposait 11 vidéos ; ses vidéos 1 (questions 1 à 9) et 4 (questions 16 à 18) dépassaient 6 à 8 minutes, contre 2 min 30 à 6 min pour l'exercice 1 : chacune est coupée en deux.
+Total : environ 42 min de texte parlé (140 mots/min, à recaler sur la voix). Le collègue proposait 11 vidéos ; ses vidéos 1 (questions 1 à 9) et 4 (questions 16 à 18) dépassaient 6 à 8 minutes, contre 2 min 30 à 6 min pour l'exercice 1 : chacune est coupée en deux.
 
 ## Convention
 
@@ -33,7 +33,7 @@ Format et règles de l'exercice 1 (voir `exercises/exercise-1/README.md`), avec 
 - **Dictées** : chaque formule suit « tapez » (ou « saisissez » pour la zone Nom) et s'arrête au point ; jamais de « , puis » à l'intérieur (il clôt la dictée pour `render_lesson.py`). Les critères numériques s'écrivent d'un bloc (`4000`, `220000`) pour être retrouvés dans la formule. Toutes les dictées ont été passées à l'aligneur de `render_lesson.py` le 2026-10-12 : elles passent toutes, sauf les cas listés dans « Pipeline ».
 - **Diction** (`tts-lexicon.json`) : fonctions lues comme un formateur les dit (NB.SI.ENS « enne bé si ensemble », RECHERCHEV « recherche vé », EQUIV « équiv », ABS « a bé esse »), sigles épelés (USA, CSV, TCD, XLSX), mots anglais écrits phonétiquement (Upper Class « Apeur Classe », Working Class, Pay, Teacher, Good, Bad, Grades, Price, James, Mason). Les mots anglais sont évités à l'oral quand l'écran suffit (indicateurs, districts, noms de métiers autres que Teacher). Contrôle fait avec `tools/tts_text.py` : aucun sigle, chiffre ni symbole ne reste dans le texte envoyé au modèle.
 - **Dictées et lexique** (`dictation-lexicon.json`) : les noms de plages se retrouvent par leur orthographe ; seules les références avec `$` y sont déclarées.
-- **Option A** : validation des données, sous-totaux, plan, TCD, tableaux, import CSV, ligne des totaux sont exécutés par COM ; le montage affiche le chemin (`menuPath`) et les réglages des boîtes de dialogue (`callout`). Le texte parlé a été écrit pour rester juste sans l'interface visible (« dans l'onglet Données, choisissez… », jamais « cliquez ici »).
+- **Option A** : validation des données, sous-totaux, plan, TCD, tableaux, import CSV sont exécutés par COM ; le montage affiche le chemin (`menuPath`) et les réglages des boîtes de dialogue (`callout`). Le texte parlé a été écrit pour rester juste sans l'interface visible (« dans l'onglet Données, choisissez… », jamais « cliquez ici »).
 
 ## Choix de résolution
 
@@ -46,10 +46,10 @@ Format et règles de l'exercice 1 (voir `exercises/exercise-1/README.md`), avec 
 - **Question 16** : pas de tri (les lignes sont déjà groupées) ; sous-totaux Somme sur Goals et Results ; colonne Écart propagée ; histogramme tracé au niveau 2 du plan, total général exclu. Les tendances en Wingdings et le graphique combiné du corrigé ne sont pas repris.
 - **Questions 17 et 18** : TCD sur `S2!A57:J93` d'abord par état (agrégation réelle), puis réorganisé comme le corrigé (filtre état = New York, universités en lignes, Revenues et Investissement) ; histogramme croisé ; la croissance (pourcentage) n'est pas tracée.
 - **Question 19** : `data/02-data.csv`, import Power Query, identifiants en Texte (zéros de tête), démonstration du piège du double clic.
-- **Question 20** : tableau `Produits`, colonne calculée Moyenne (référence structurée), ajout puis retrait d'une ligne, ligne des totaux en Moyenne.
+- **Question 20** : tableau `Produits`, colonne calculée Moyenne (référence structurée), ligne tapée sous le tableau puis annulée, résumé `=MOYENNE(Produits[Moyenne])` en F20. Pas de ligne des totaux : elle pousserait vers le bas les colonnes A à F sous le tableau et désalignerait les tableaux des questions 21 à 25 (voir « Vérifications »).
 - **Question 21** : erreur montrée d'abord (`=C25*D38` recopiée), puis `=$C25*D$38`, puis F4.
 - **Question 22** : seuils lus dans les cellules, `>=` pour Excellent et Good (le corrigé prend `>` pour Good ; mêmes résultats avec ces données).
-- **Question 23** : ET sur une plage (`ET(C59:F59>=$I$71)`, les quatre notes), OU, SI sur la colonne OU, ET combiné à OU, et un exemple de NON ajouté (colonne « Prospect » : critères remplis mais pas client), l'énoncé et le corrigé n'en ayant aucun.
+- **Question 23** : ET sur une plage (`ET(C59:F59>=$I$71)`, les quatre notes), OU, SI sur la colonne OU (recopié : les colonnes F:G et H:I de ces tableaux sont fusionnées, une propagation y renvoie `#PROPAGATION!`), ET combiné à OU, et un exemple de NON ajouté (colonne « Prospect » en J, critères remplis mais pas client), l'énoncé et le corrigé n'en ayant aucun.
 - **Question 24** : RECHERCHEV en rappel, TRANSPOSE (formule propagée au lieu d'une recopie à la main), RECHERCHEH, RECHERCHEX avec recherche vers la gauche et message d'absence.
 - **Question 25** : INDEX et les trois EQUIV du corrigé, puis INDEX avec deux EQUIV pilotés par des cellules.
 
@@ -83,13 +83,14 @@ Non signalées à l'oral, à transmettre au client : fautes de la feuille QS («
 | 2 | 8 | 13 | 21, 8, 40, 33 |
 | 3 | 3 (Emma, Mason, Michael) | 16 | 15/14, 14/13, 13/14, 12/17, total 54/58 |
 | 4 | 48 654 | 17 | Californie 23 455 510 ; New York : Columbia, Cornell, NYU |
+| — | — | 20 | moyenne Produits A1 64,5 ; prix moyen (F20) 63,18 |
 | 5 | 6 066 | 21 | premier téléviseur : 1 688,70 £, 1 970,15 €, 314 509,55 ¥ |
 | 6 | 2 770,90 | 22 | Excellent : Emily, Assia ; Bad : Noah ; Good : les sept autres |
 | 7 | 2 897 | 23 | ET : Excellent Assia, Good Emily, Olivia, Mia ; OU : Alex, Olivia, Noah, Assia ; ET et OU : Alex, Olivia, Assia ; Prospect : Noah |
 | 8 | 4 532,88 (Charlotte) | 24 | Pomme 6, Orange 5, Kiwi 2, code C3 → Orange |
 | 9 | 17 % (William) | 25 | 18 ; EQUIV 4, 2, 3 ; Alice en math 16 ; Bob en anglais 11 |
 
-Pay de Lili : 3 534. Valeurs recalculées le 2026-10-12 à partir de `data/01-data.xlsx` (et des salaires de `SOL`).
+Pay de Lili : 3 534. Valeurs recalculées le 2026-10-12 à partir de `data/01-data.xlsx` (et des salaires de `SOL`), puis **toutes retrouvées dans Excel** (voir « Vérifications »).
 
 ## Analyse du pack du collègue (2026-10-12)
 
@@ -120,7 +121,21 @@ Vidéos 0 à 2 identiques à la v2 du 2026-10-11 (restes déjà relevés : dict�
 
 **Pipeline, avant les prises**
 - `tokenizeFormula` (`tools/render_lesson.py`) ne reconnaît pas `$` : accepter `$` dans le motif des noms suffit, avec les entrées de `dictation-lexicon.json` (simulation faite le 2026-10-12 : vidéos 8 et 10 alignées).
-- Références structurées (`Produits[@[Price 1]:[Price 4]]`, vidéo 8) : `"card": false`, ou extension du découpeur.
-- Timelines et marqueurs `{@…}` à écrire. Événements à ajouter à `run_timeline.py` : validation de données (liste), sous-totaux et niveaux de plan, TCD (création, champs, filtre) et graphique croisé, tableau (création, nom, ligne ajoutée, ligne des totaux), import Power Query, ouverture d'un CSV avec `Local=True`.
+- Références structurées (`Produits[@[Price 1]:[Price 4]]` et `Produits[Moyenne]`, vidéo 8) : `"card": false`, ou extension du découpeur.
+- Timelines et marqueurs `{@…}` à écrire. Événements à ajouter à `run_timeline.py` : validation de données (liste), sous-totaux et niveaux de plan, TCD (création, champs, filtre) et graphique croisé, tableau (création, nom, redimensionnement), import du CSV, ouverture d'un CSV dans un second classeur, recopie d'un bloc fusionné.
 - Génération de `state-00.xlsx` (énoncé + salaires).
-- À vérifier dans un vrai Excel : ligne des années prise comme étiquettes avec A22 vide (vidéo 4) ; lignes masquées absentes du graphique au niveau 2 (vidéo 5) ; libellés du chemin Power Query et de « Remplacer l'étape actuelle » (vidéo 7) ; colonne calculée créée par COM dans un tableau (vidéo 8).
+- Import du CSV par COM : le chargement Power Query échoue (`E_INVALIDARG`) dans une instance invisible ; à réessayer dans l'instance visible de la prise, sinon repli sur `QueryTables.Add("TEXT;…")` (détail dans la note de la vidéo 7).
+
+## Vérifications dans Excel (2026-10-12)
+
+Toutes les actions des vidéos 1 à 12 rejouées dans l'ordre par COM (Excel M365 français de Wilfried, instance invisible, copie de l'énoncé avec les salaires de `SOL`) : **92 contrôles sur 92 réussis**. Script jetable, non versionné.
+
+- **Formules** : les 41 formules des scripts s'écrivent telles quelles en `Formula2Local` et donnent les valeurs de contrôle ci-dessus ; propagations vérifiées (Pay, Classes, ABS, années, RECHERCHEV avec COLONNE sur 25 colonnes, écart des sous-totaux, mentions, TRANSPOSE) ; `ET` sur une colonne entière ne se propage pas (une seule réponse) ; « Upper Classes » ne trouve aucune ligne ; « Bob » suivi d'une espace renvoie `#N/A`, puis 11 une fois corrigé.
+- **Vidéo 4** : avec A22 vide, le graphique en courbes sur A22:Z23 a une seule série, nommée d'après A23, et les années en catégories ; il suit le changement de métier.
+- **Vidéo 5** : libellés « Total Enrollment »… « Total général », formules `SOUS.TOTAL(9;…)` ; graphique de 4 points au niveau 2, 20 au niveau 3. Les sous-totaux insèrent des lignes entières : le tableau des universités passe de A57:J93 à A62:J98 (vidéo 6 corrigée en conséquence).
+- **Vidéo 6** : 21 états, Californie 23 455 510, filtre New York sur Columbia, Cornell et NYU, graphique croisé lié qui passe à 6 points avec la Californie ; champ de valeur nommé « Somme de Revenues ».
+- **Vidéo 7** : ouvert directement, le CSV met chaque ligne en colonne A ; découpé à la virgule, 00100300 devient 100300. Libellé exact du ruban : « À partir d'un fichier texte/CSV » (lu par UI Automation).
+- **Vidéo 8** : en-tête tapé à droite et formule de la première ligne suffisent, même par COM, pour élargir le tableau et remplir la colonne calculée ; une ligne tapée sous le tableau l'agrandit sans rien décaler. **La ligne des totaux et `ListRows.Add` poussent d'une ligne vers le bas les colonnes A à F sous le tableau**, pas les suivantes : script corrigé (résumé en F20 à la place). Recopie sans dollar : D26 lit D39 (0), E25 multiplie le prix en livres.
+- **Vidéo 10** : cellules fusionnées F:G et H:I dans les tableaux OU et ET-OU ; propagation vers H77 en `#PROPAGATION!`, recopie du bloc fusionné correcte : script corrigé (SI recopié, colonne Prospect en J).
+- **Libellés du ruban** lus dans Excel (`CommandBars.GetLabelMso`) : « Création de tableau », « Analyse du tableau croisé dynamique », « Validation des données », « Gestionnaire de noms », « Plan › Sous-total », « Graphique croisé dynamique », « Style de pourcentage », « Actualiser tout », « Insérer un graphique en courbes ou en aires », « Insérer un histogramme ou un graphique à barres » ; chemins des scripts alignés.
+- **Non vérifiable par COM** : la boîte « Remplacer l'étape actuelle » de l'éditeur Power Query (absente de la doc Microsoft) ; le texte parlé reste général (« si Excel demande de remplacer l'étape existante, acceptez »).
