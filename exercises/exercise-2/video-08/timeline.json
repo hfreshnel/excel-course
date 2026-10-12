@@ -35,6 +35,7 @@
 		{"at": "totalRow", "to": "r8", "type": "callout", "title": "Ligne des totaux : pas ici", "lines": [{"text": "Elle décalerait les cellules du dessous"}]},
 		{"at": "totalRow", "to": "r8", "type": "highlight", "target": "A19:F19"},
 		{"at": "r8", "to": "tvs", "type": "callout", "title": "Question 21 de l'énoncé", "lines": [{"text": "Références de cellules"}]},
+		{"at": "tvs", "type": "scroll", "row": 20, "column": 1},
 		{"at": "tvs", "to": "rates", "type": "highlight", "target": "B25:C34"},
 		{"at": "rates", "to": "r9", "type": "highlight", "target": "C37:F38"},
 		{"at": "selD25", "type": "select", "target": "D25"},

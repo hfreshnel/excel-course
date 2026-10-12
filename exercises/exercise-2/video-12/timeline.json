@@ -23,6 +23,7 @@
 		{"at": "selB158", "type": "select", "target": "B158"},
 		{"at": "b158", "type": "formula", "target": "B158", "formula": "=EQUIV(D145;B145:D145;0)"},
 		{"at": "b158", "to": "r7", "type": "highlight", "target": "B145:D145,B158"},
+		{"at": "r7", "offset": 0.3, "type": "scroll", "row": 126, "column": 1},
 		{"at": "r7", "offset": 0.5, "type": "value", "target": "G131:G133", "value": ["Élève", "Matière", "Note"]},
 		{"at": "eqRow", "to": "r8", "type": "callout", "title": "INDEX et deux EQUIV", "lines": [{"text": "EQUIV", "detail": "ligne de l'élève", "kind": "formula", "at": "eqRow"}, {"text": "EQUIV", "detail": "colonne de la matière", "kind": "formula", "at": "eqCol"}, {"text": "INDEX", "detail": "la note au croisement", "kind": "formula", "at": "idx"}]},
 		{"at": "writeJames", "offset": 0.8, "type": "value", "target": "H131", "value": "James"},

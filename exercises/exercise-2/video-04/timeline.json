@@ -29,7 +29,7 @@
 		{"at": "a22", "to": "r6", "type": "highlight", "target": "A22"},
 		{"at": "one", "to": "numbers", "type": "highlight", "target": "A2:A19"},
 		{"at": "numbers", "to": "r7", "type": "callout", "title": "RECHERCHEV : une colonne, un numéro", "lines": [{"text": "2000", "detail": "colonne 2", "kind": "formula"}, {"text": "2024", "detail": "colonne 26", "kind": "formula"}, {"text": "Tous les numéros d'un coup", "at": "allAtOnce"}]},
-		{"at": "numbers", "to": "r7", "type": "highlight", "target": "B1,Z1"},
+		{"at": "numbers", "to": "r7", "type": "highlight", "target": "B1"},
 		{"at": "selB23", "type": "select", "target": "B23"},
 		{"at": "b23", "type": "formula", "target": "B23", "formula": "=RECHERCHEV(A23;A2:Z19;COLONNE(B1:Z1);FAUX)"},
 		{"at": "b23", "to": "spill23", "type": "callout", "title": "COLONNE(B1:Z1)", "lines": [{"text": "2 ; 3 ; 4 ; … ; 26", "kind": "formula"}]},
